@@ -460,7 +460,7 @@ void Iterate::finalResiduals() const {
   // If ipx has been used, the information is already available, otherwise,
   // compute it.
 
-  if (!info.ipx_used) {
+  if (!info.ipx_used_refine) {
     info.p_obj = pobj;
     info.d_obj = dobj;
     info.pd_gap = pdgap;

@@ -119,7 +119,8 @@ void Solver::reset() {
 
   info_ = Info{};
 
-  info_.ipx_used = false;
+  info_.ipx_used_refine = false;
+  info_.ipx_used_crossover = false;
   info_.m_solver = m_;
   info_.n_solver = n_;
   info_.m_original = model_.m_orig();
@@ -1397,7 +1398,7 @@ void Solver::printSummary() const {
     log_stream << textline("Error:") << errorString((Error)info_.error) << "\n";
 
   log_stream << textline("HiPO iterations:") << integer(iter_) << "\n";
-  if (info_.ipx_used)
+  if (info_.ipx_used_refine)
     log_stream << textline("IPX iterations:") << integer(info_.ipx_info.iter)
                << "\n";
 
@@ -1469,7 +1470,7 @@ void Solver::getInteriorSolution(
     std::vector<double>& zu) const {
   // prepare and return solution with internal format
 
-  if (!info_.ipx_used) {
+  if (!info_.ipx_used_refine) {
     model_.postprocess(x, xl, xu, slack, y, zl, zu, *it_);
   } else {
     ipx_lps_.GetInteriorSolution(x.data(), xl.data(), xu.data(), slack.data(),
@@ -1482,6 +1483,13 @@ Int Solver::getBasicSolution(std::vector<double>& x, std::vector<double>& slack,
                              Int* cbasis, Int* vbasis) const {
   return ipx_lps_.GetBasicSolution(x.data(), slack.data(), y.data(), z.data(),
                                    cbasis, vbasis);
+}
+
+void Solver::getPointForCrossover(std::vector<double>& x,
+                                  std::vector<double>& slack,
+                                  std::vector<double>& y,
+                                  std::vector<double>& z) {
+  model_.postprocess(x, slack, y, z, *it_);
 }
 
 void Solver::chooseNumberOfCorrectors() {
