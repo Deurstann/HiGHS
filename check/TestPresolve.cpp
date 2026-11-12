@@ -2467,15 +2467,10 @@ TEST_CASE("issue-3565", "[highs_test_presolve]") {
 }
 
 TEST_CASE("forcing-row-slack-small-coefficients", "[highs_test_presolve]") {
-  // the first row has slack 5e-8 above the minimum activity 0, within the
-  // primal feasibility tolerance, but its tiny coefficients let the columns
-  // move by 5e-3 from their bounds: fixing them at zero as a forcing row makes
-  // the second row infeasible
+  // feasible LP whose first row has slack within the primal feasibility
+  // tolerance but tiny coefficients: presolve must not fix its columns
   //
-  // min x0 + x1 + x2
-  // s.t. 1e-5 x0 + 1e-5 x1 + 1e-5 x2 = 5e-8
-  //      x0 + 2 x1 + 3 x2 = 5e-3
-  //      x0, x1, x2 >= 0
+  // min x0 + x1 + x2 s.t. 1e-5 (x0 + x1 + x2) = 5e-8, x0 + 2 x1 + 3 x2 = 5e-3
   HighsLp lp;
   lp.num_col_ = 3;
   lp.num_row_ = 2;
