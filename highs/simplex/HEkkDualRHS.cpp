@@ -29,6 +29,7 @@ void HEkkDualRHS::setup() {
   workMark.resize(numRow);
   workIndex.resize(numRow);
   work_infeasibility.resize(numRow);
+  unknown_weight_row.clear();
   partNum = 0;
   partSwitch = 0;
   analysis = &ekk_instance_.analysis_;
@@ -317,6 +318,7 @@ bool HEkkDualRHS::updatePrimal(HVector* column, double theta) {
   const double* baseUpper = ekk_instance_.info_.baseUpper_.data();
   const double Tp = ekk_instance_.options_->primal_feasibility_tolerance;
   double* baseValue = ekk_instance_.info_.baseValue_.data();
+  const double* edge_weight = ekk_instance_.dual_edge_weight_.data();
 
   HighsInt num_excessive_primal = 0;
   bool updatePrimal_inDense = columnCount < 0 || columnCount > 0.4 * numRow;
@@ -340,6 +342,8 @@ bool HEkkDualRHS::updatePrimal(HVector* column, double theta) {
       work_infeasibility[iRow] = primal_infeasibility * primal_infeasibility;
     else
       work_infeasibility[iRow] = fabs(primal_infeasibility);
+    if (primal_infeasibility != 0 && edge_weight[iRow] < 0)
+      unknown_weight_row.push_back(iRow);
     if (baseValue[iRow] <= -kExcessivePrimalValue ||
         baseValue[iRow] >= kExcessivePrimalValue)
       num_excessive_primal++;
@@ -394,11 +398,12 @@ void HEkkDualRHS::updateInfeasList(HVector* column) {
       }
     }
   } else {
-    // The hyper sparse way
+    // The hyper sparse way: only primal infeasible rows have known weights
     for (HighsInt i = 0; i < columnCount; i++) {
       HighsInt iRow = variable_index[i];
       if (!workMark[iRow]) {
-        if (work_infeasibility[iRow] > edge_weight[iRow] * workCutoff) {
+        if (work_infeasibility[iRow] &&
+            work_infeasibility[iRow] > edge_weight[iRow] * workCutoff) {
           workIndex[workCount++] = iRow;
           workMark[iRow] = true;
         }
@@ -415,6 +420,8 @@ void HEkkDualRHS::createArrayOfPrimalInfeasibilities() {
   const double* baseLower = ekk_instance_.info_.baseLower_.data();
   const double* baseUpper = ekk_instance_.info_.baseUpper_.data();
   const double Tp = ekk_instance_.options_->primal_feasibility_tolerance;
+  const double* edge_weight = ekk_instance_.dual_edge_weight_.data();
+  unknown_weight_row.clear();
   for (HighsInt i = 0; i < numRow; i++) {
     // @primal_infeasibility calculation
     const double value = baseValue[i];
@@ -430,7 +437,20 @@ void HEkkDualRHS::createArrayOfPrimalInfeasibilities() {
       work_infeasibility[i] = primal_infeasibility * primal_infeasibility;
     else
       work_infeasibility[i] = fabs(primal_infeasibility);
+    if (primal_infeasibility != 0 && edge_weight[i] < 0)
+      unknown_weight_row.push_back(i);
   }
+}
+
+void HEkkDualRHS::computeUnknownEdgeWeights() {
+  if (unknown_weight_row.empty()) return;
+  for (const HighsInt iRow : unknown_weight_row) {
+    // Skip a row that is no longer primal infeasible
+    if (!work_infeasibility[iRow]) continue;
+    ekk_instance_.computeUnknownDualSteepestEdgeWeight(iRow,
+                                                       unknown_weight_row_ep);
+  }
+  unknown_weight_row.clear();
 }
 
 void HEkkDualRHS::createInfeasList(double columnDensity) {
@@ -464,11 +484,12 @@ void HEkkDualRHS::createInfeasList(double columnDensity) {
     double cutMerit = -dwork[icutoff];
     workCutoff = min(maxMerit * 0.99999, cutMerit * 1.00001);
 
-    // Create again
+    // Create again: only primal infeasible rows have known weights
     fill_n(workMark.data(), numRow, false);
     workCount = 0;
     for (HighsInt iRow = 0; iRow < numRow; iRow++) {
-      if (work_infeasibility[iRow] >= edge_weight[iRow] * workCutoff) {
+      if (work_infeasibility[iRow] &&
+          work_infeasibility[iRow] >= edge_weight[iRow] * workCutoff) {
         workIndex[workCount++] = iRow;
         workMark[iRow] = true;
       }

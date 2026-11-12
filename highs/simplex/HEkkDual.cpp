@@ -136,6 +136,11 @@ HighsStatus HEkkDual::solve(const bool pass_force_phase2) {
     assert((HighsInt)ekk_instance_.dual_edge_weight_.size() >= solver_num_row);
     assert((HighsInt)ekk_instance_.scattered_dual_edge_weight_.size() >=
            solver_num_tot);
+    // Only the serial dual simplex with steepest edge computes the
+    // weights left unknown by a previous solve when they are needed
+    if (ekk_instance_.info_.simplex_strategy != kSimplexStrategyDualPlain ||
+        edge_weight_mode != EdgeWeightMode::kSteepestEdge)
+      ekk_instance_.computeUnknownDualSteepestEdgeWeights();
     ekk_instance_.devDebugDualSteepestEdgeWeights("before solve");
   } else {
     // Set up edge weights
@@ -163,6 +168,17 @@ HighsStatus HEkkDual::solve(const bool pass_force_phase2) {
               "than compute steepest edge weights\n");
           edge_weight_mode = EdgeWeightMode::kDevex;
           assert(!status.has_dual_steepest_edge_weights);
+        } else if (ekk_instance_.info_.simplex_strategy ==
+                   kSimplexStrategyDualPlain) {
+          // Compute the weight of a row when it is first primal
+          // infeasible: the choice of the leaving row only reads the
+          // weights of such rows
+          highsLogDev(options.log_options, HighsLogType::kDetailed,
+                      "Basis is not logical, so compute steepest edge "
+                      "weights when first needed\n");
+          ekk_instance_.dual_edge_weight_.assign(
+              solver_num_row, kUnknownDualSteepestEdgeWeight);
+          status.has_dual_steepest_edge_weights = true;
         } else {
           // Compute steepest edge weights
           highsLogDev(
@@ -1092,6 +1108,7 @@ void HEkkDual::rebuild() {
   // Collect primal infeasible as a list
   analysis->simplexTimerStart(CollectPrIfsClock);
   dualRHS.createArrayOfPrimalInfeasibilities();
+  dualRHS.computeUnknownEdgeWeights();
   dualRHS.createInfeasList(ekk_instance_.info_.col_aq_density);
   analysis->simplexTimerStop(CollectPrIfsClock);
 
@@ -2145,7 +2162,10 @@ void HEkkDual::updatePrimal(HVector* DSE_Vector) {
   // steepest edge weights) or row_ep = B^{-T}e_p.
   //
   // Update - primal and weight
+  // Unknown weights are computed for the current basis, before the
+  // weight update takes them to the next one
   dualRHS.updatePrimal(&col_BFRT, 1);
+  dualRHS.computeUnknownEdgeWeights();
   dualRHS.updateInfeasList(&col_BFRT);
   double x_out = baseValue[row_out];
   double l_out = baseLower[row_out];
@@ -2156,6 +2176,7 @@ void HEkkDual::updatePrimal(HVector* DSE_Vector) {
     rebuild_reason = kRebuildReasonExcessivePrimalValue;
     return;
   }
+  dualRHS.computeUnknownEdgeWeights();
   ekk_instance_.updateBadBasisChange(col_aq, theta_primal);
   if (edge_weight_mode == EdgeWeightMode::kSteepestEdge) {
     const double pivot_in_scaled_space =

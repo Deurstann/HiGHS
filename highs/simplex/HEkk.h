@@ -86,6 +86,8 @@ class HEkk {
   void setNlaRefactorInfo();
   void btran(HVector& rhs, const double expected_density);
   void ftran(HVector& rhs, const double expected_density);
+  void computeUnknownDualSteepestEdgeWeight(const HighsInt iRow,
+                                            HVector& row_ep);
 
   void moveLp(HighsLpSolverObject& solver_object);
   void setPointers(HighsCallback* callback, HighsOptions* options,
@@ -279,7 +281,9 @@ class HEkk {
   bool rebuildRefactor(HighsInt rebuild_reason);
   HighsInt computeFactor();
   void computeDualSteepestEdgeWeights(const bool initial = false);
-  double computeDualSteepestEdgeWeight(const HighsInt iRow, HVector& row_ep);
+  double computeDualSteepestEdgeWeight(const HighsInt iRow, HVector& row_ep,
+                                       const bool update_density = true);
+  void computeUnknownDualSteepestEdgeWeights();
   void updateDualSteepestEdgeWeights(const HighsInt row_out,
                                      const HighsInt variable_in,
                                      const HVector* column,

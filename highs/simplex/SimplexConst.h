@@ -161,6 +161,10 @@ const double kAcceptDseWeightThreshold = 0.25;
 
 const double kMinDualSteepestEdgeWeight = 1e-4;
 
+// Marks a dual steepest edge weight that is not known yet: it is
+// computed when its row first becomes primal infeasible
+const double kUnknownDualSteepestEdgeWeight = -1;
+
 const HighsInt kNoRowSought = -2;
 const HighsInt kNoRowChosen = -1;
 

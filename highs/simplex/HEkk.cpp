@@ -2096,8 +2096,24 @@ void HEkk::computeDualSteepestEdgeWeights(const bool initial) {
   }
 }
 
-double HEkk::computeDualSteepestEdgeWeight(const HighsInt iRow,
-                                           HVector& row_ep) {
+// Compute the dual steepest edge weight of a row if it is unknown,
+// setting up the work vector row_ep when it is first used. The
+// density of these BTRANs does not drive that of the simplex BTRANs
+void HEkk::computeUnknownDualSteepestEdgeWeight(const HighsInt iRow,
+                                                HVector& row_ep) {
+  if (dual_edge_weight_[iRow] >= 0) return;
+  if (row_ep.array.empty()) row_ep.setup(lp_.num_row_);
+  dual_edge_weight_[iRow] = computeDualSteepestEdgeWeight(iRow, row_ep, false);
+}
+
+void HEkk::computeUnknownDualSteepestEdgeWeights() {
+  HVector row_ep;
+  for (HighsInt iRow = 0; iRow < lp_.num_row_; iRow++)
+    computeUnknownDualSteepestEdgeWeight(iRow, row_ep);
+}
+
+double HEkk::computeDualSteepestEdgeWeight(const HighsInt iRow, HVector& row_ep,
+                                           const bool update_density) {
   row_ep.clear();
   row_ep.count = 1;
   row_ep.index[0] = iRow;
@@ -2105,8 +2121,10 @@ double HEkk::computeDualSteepestEdgeWeight(const HighsInt iRow,
   row_ep.packFlag = false;
   simplex_nla_.btranInScaledSpace(row_ep, info_.row_ep_density,
                                   analysis_.pointer_serial_factor_clocks);
-  const double local_row_ep_density = (1.0 * row_ep.count) / lp_.num_row_;
-  updateOperationResultDensity(local_row_ep_density, info_.row_ep_density);
+  if (update_density) {
+    const double local_row_ep_density = (1.0 * row_ep.count) / lp_.num_row_;
+    updateOperationResultDensity(local_row_ep_density, info_.row_ep_density);
+  }
   return row_ep.norm2();
 }
 
@@ -2230,6 +2248,8 @@ void HEkk::updateDualSteepestEdgeWeights(
     const HighsInt iRow = use_row_indices ? variable_index[iEntry] : iEntry;
     double aa_iRow = column_array[iRow];
     if (!aa_iRow) continue;
+    // An unknown weight is computed for the basis of its first use
+    if (dual_edge_weight_[iRow] < 0) continue;
     double dual_steepest_edge_array_value = dual_steepest_edge_array[iRow];
     if (convert_to_scaled_space) {
       double basic_col_scale = simplex_nla_.basicColScaleFactor(iRow);

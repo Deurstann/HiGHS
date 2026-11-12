@@ -97,7 +97,11 @@ void HighsTableauSeparator::separateLpSolution(HighsLpRelaxation& lpRelaxation,
                               (HighsInt)mip.mipdata_->integral_cols.size()))});
 
   if ((HighsInt)fractionalBasisvars.size() > maxTries) {
-    const double* edgeWt = lpRelaxation.getLpSolver().getDualEdgeWeights();
+    std::vector<HighsInt> fractionalBasisInds;
+    fractionalBasisInds.reserve(fractionalBasisvars.size());
+    for (const FractionalInteger& fracint : fractionalBasisvars)
+      fractionalBasisInds.push_back(fracint.basisIndex);
+    const double* edgeWt = lpSolver.getDualEdgeWeights(fractionalBasisInds);
     if (edgeWt) {
       // printf("choosing %ld/%zu with DSE weights\n", maxTries,
       // fractionalBasisvars.size());

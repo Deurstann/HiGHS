@@ -2477,6 +2477,19 @@ HighsStatus Highs::getBasicVariables(HighsInt* basic_variables) {
   return status;
 }
 
+const double* Highs::getDualEdgeWeights(
+    const std::vector<HighsInt>& basic_index) {
+  if (!ekk_instance_.status_.has_dual_steepest_edge_weights ||
+      !ekk_instance_.status_.has_invert)
+    return nullptr;
+  HVector row_ep;
+  for (const HighsInt iRow : basic_index) {
+    assert(iRow >= 0 && iRow < model_.lp_.num_row_);
+    ekk_instance_.computeUnknownDualSteepestEdgeWeight(iRow, row_ep);
+  }
+  return ekk_instance_.dual_edge_weight_.data();
+}
+
 HighsStatus Highs::getBasisInverseRowSparse(const HighsInt row,
                                             HVector& row_ep_buffer) {
   this->logHeader();

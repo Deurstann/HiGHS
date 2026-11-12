@@ -1435,13 +1435,22 @@ class Highs {
 
   /**
    * @brief Get the dual edge weights (steepest/devex) in the order of
-   * the basic indices or nullptr when they are not available.
+   * the basic indices or nullptr when they are not available. A
+   * steepest edge weight that the simplex solver has not needed yet is
+   * negative.
    */
   const double* getDualEdgeWeights() const {
     return ekk_instance_.status_.has_dual_steepest_edge_weights
                ? ekk_instance_.dual_edge_weight_.data()
                : nullptr;
   }
+
+  /**
+   * @brief Get the dual edge weights as above, with the steepest edge
+   * weights of the given basic indices computed if not known yet, or
+   * nullptr when there is no invertible representation of the basis
+   */
+  const double* getDualEdgeWeights(const std::vector<HighsInt>& basic_index);
 
   /**
    * @brief Gets the internal basic variable index array in the order

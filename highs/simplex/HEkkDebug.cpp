@@ -1530,27 +1530,34 @@ HighsDebugStatus HEkk::debugDualSteepestEdgeWeights(
   double dual_steepest_edge_weight_norm = 0;
   double dual_steepest_edge_weight_error = 0;
   HighsInt num_check_weight;
+  // Unknown weights are not checked
   if (use_debug_level < kHighsDebugLevelExpensive) {
     for (HighsInt iRow = 0; iRow < num_row; iRow++) {
+      if (dual_edge_weight_[iRow] < 0) continue;
       dual_steepest_edge_weight_norm += std::fabs(dual_edge_weight_[iRow]);
     }
     // Just check a few weights
-    num_check_weight =
+    const HighsInt num_try_weight =
         std::max((HighsInt)1, std::min((HighsInt)10, num_row / 10));
+    num_check_weight = 0;
     HVector row_ep;
     row_ep.setup(num_row);
-    for (HighsInt iCheck = 0; iCheck < num_check_weight; iCheck++) {
+    for (HighsInt iCheck = 0; iCheck < num_try_weight; iCheck++) {
       HighsInt iRow = random_.integer(num_row);
+      if (dual_edge_weight_[iRow] < 0) continue;
+      num_check_weight++;
       const double true_weight = computeDualSteepestEdgeWeight(iRow, row_ep);
       dual_steepest_edge_weight_error +=
           std::fabs(this->dual_edge_weight_[iRow] - true_weight);
     }
   } else {
     // Check all weights
-    num_check_weight = num_row;
+    num_check_weight = 0;
     std::vector<double> updated_dual_edge_weight = this->dual_edge_weight_;
     computeDualSteepestEdgeWeights();
     for (HighsInt iRow = 0; iRow < num_row; iRow++) {
+      if (updated_dual_edge_weight[iRow] < 0) continue;
+      num_check_weight++;
       dual_steepest_edge_weight_norm +=
           std::fabs(this->dual_edge_weight_[iRow]);
       const double error = std::fabs(updated_dual_edge_weight[iRow] -
@@ -1560,7 +1567,7 @@ HighsDebugStatus HEkk::debugDualSteepestEdgeWeights(
     this->dual_edge_weight_ = updated_dual_edge_weight;
   }
   // Now assess the relative error
-  assert(dual_steepest_edge_weight_norm > 0);
+  if (dual_steepest_edge_weight_norm == 0) return HighsDebugStatus::kNotChecked;
   double relative_dual_steepest_edge_weight_error =
       dual_steepest_edge_weight_error / dual_steepest_edge_weight_norm;
   const double large_relative_dual_steepest_edge_weight_error = 1e-3;

@@ -107,6 +107,12 @@ class HEkkDualRHS {
    */
   void createArrayOfPrimalInfeasibilities();
 
+  /**
+   * @brief Compute the unknown dual steepest edge weights of the rows
+   * that have become primal infeasible, for the current basis
+   */
+  void computeUnknownEdgeWeights();
+
   void assessOptimality();
 
   // References:
@@ -121,6 +127,10 @@ class HEkkDualRHS {
   std::vector<HighsInt>
       workIndex;  //!< List of rows with greatest primal infeasibilities
   std::vector<double> work_infeasibility;
+  // Rows that became primal infeasible with an unknown dual steepest
+  // edge weight, and the work vector used to compute their weights
+  std::vector<HighsInt> unknown_weight_row;
+  HVector unknown_weight_row_ep;
 
   HighsInt partNum;
   HighsInt partNumRow;
