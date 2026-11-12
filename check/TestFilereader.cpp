@@ -27,6 +27,7 @@ TEST_CASE("filereader-edge-cases", "[highs_filereader]") {
 
   Highs highs;
   highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("solver", kSimplexString);
   const HighsInfo& info = highs.getInfo();
 
   if (run_first_tests) {

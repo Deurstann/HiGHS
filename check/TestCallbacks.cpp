@@ -411,6 +411,7 @@ TEST_CASE("highs-callback-simplex-interrupt", "[highs_callback]") {
       std::string(HIGHS_DIR) + "/check/instances/adlittle.mps";
   Highs highs;
   highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("solver", kSimplexString);
   highs.setCallback(userInterruptCallback);
   highs.startCallback(kCallbackSimplexInterrupt);
   highs.readModel(filename);

@@ -388,6 +388,7 @@ TEST_CASE("simplex-stats", "[highs_lp_solver]") {
   Highs h;
   const HighsSimplexStats& simplex_stats = h.getSimplexStats();
   h.setOptionValue("output_flag", dev_run);
+  h.setOptionValue("solver", kSimplexString);
   std::string model_file =
       std::string(HIGHS_DIR) + "/check/instances/adlittle.mps";
   REQUIRE(h.readModel(model_file) == HighsStatus::kOk);
@@ -592,6 +593,22 @@ TEST_CASE("choose-hipo-first", "[highs_lp_solver]") {
   REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
   REQUIRE(h.getInfo().ipm_iteration_count == 0);
 
+  // Without presolve, the basis comes with an invertible representation
+  h.clearSolver();
+  h.setOptionValue("presolve", kHighsOffString);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+  double kappa;
+  REQUIRE(h.getKappa(kappa) == HighsStatus::kOk);
+
+  // The objective bound is for simplex
+  h.clearSolver();
+  h.setOptionValue("objective_bound", 0.0);
+  h.run();
+  REQUIRE(h.getInfo().ipm_iteration_count == 0);
+  h.setOptionValue("objective_bound", kHighsInf);
+
   // HiPO's verdict on an infeasible LP is confirmed by simplex
   HighsLp lp;
   lp.num_col_ = 2;
@@ -606,7 +623,6 @@ TEST_CASE("choose-hipo-first", "[highs_lp_solver]") {
   lp.a_matrix_.index_ = {0, 1, 0, 1};
   lp.a_matrix_.value_ = {1, 1, 1, 1};
   REQUIRE(h.passModel(lp) == HighsStatus::kOk);
-  h.setOptionValue("presolve", kHighsOffString);
   REQUIRE(h.run() == HighsStatus::kOk);
   REQUIRE(h.getModelStatus() == HighsModelStatus::kInfeasible);
   REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);

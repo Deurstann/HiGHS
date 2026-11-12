@@ -60,6 +60,7 @@ TEST_CASE("Factor-put-get-iterate", "[highs_test_factor]") {
   // Switch off presolve so that recovery of DSE weights can be
   // assessed
   highs.setOptionValue("presolve", kHighsOffString);
+  highs.setOptionValue("solver", kSimplexString);
   highs.run();
   HighsSolution solution = highs.getSolution();
   HighsBasis basis = highs.getBasis();
