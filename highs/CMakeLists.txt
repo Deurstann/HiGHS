@@ -166,6 +166,13 @@ else()
 
   set_target_properties(highs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+  # GCC treats each exported function of position-independent code as
+  # replaceable at load time, so calls between them are never inlined.
+  if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(highs PRIVATE "-fno-semantic-interposition")
+    target_link_options(highs PRIVATE "-fno-semantic-interposition")
+  endif()
+
   if(APPLE)
       set_target_properties(highs PROPERTIES INSTALL_RPATH "@loader_path")
   elseif (UNIX)
