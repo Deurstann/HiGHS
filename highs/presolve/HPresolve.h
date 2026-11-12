@@ -202,6 +202,10 @@ class HPresolve {
 
   double getMaxAbsColVal(HighsInt col) const;
 
+  // True if moving the column by at most `move` changes its value and every
+  // row activity by at most the primal feasibility tolerance
+  bool isNegligibleColMove(HighsInt col, double move) const;
+
   double getMaxAbsRowVal(HighsInt row) const;
 
   bool checkUpdateColImpliedBounds(HighsInt row, double* rowLower = nullptr,

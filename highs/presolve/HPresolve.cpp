@@ -1535,13 +1535,17 @@ HPresolve::Result HPresolve::changeColBounds(HighsInt col, double newLower,
   return Result::kOk;
 }
 
+bool HPresolve::isNegligibleColMove(HighsInt col, double move) const {
+  return move <= primal_feastol &&
+         (move <= options->small_matrix_value ||
+          getMaxAbsColVal(col) * move <= primal_feastol);
+}
+
 HPresolve::Result HPresolve::checkColBounds(HighsInt col, bool* isFixed) {
   assert(!colDeleted[col]);
   double boundDiff = model->col_upper_[col] - model->col_lower_[col];
   if (isFixed != nullptr) *isFixed = false;
-  if (boundDiff <= primal_feastol &&
-      (boundDiff <= options->small_matrix_value ||
-       getMaxAbsColVal(col) * boundDiff <= primal_feastol)) {
+  if (isNegligibleColMove(col, boundDiff)) {
     // check for primal infeasibility
     if (boundDiff < -primal_feastol) return Result::kPrimalInfeasible;
     // check for unboundedness
@@ -3409,6 +3413,19 @@ HPresolve::Result HPresolve::rowPresolve(HighsPostsolveStack& postsolve_stack,
     }
 
     if (nfixings != rowsize[row]) return Result::kOk;
+
+    // if the row has slack, fixing its columns at their bounds removes
+    // feasible points: only do so if the move that the slack allows each
+    // column is negligible, so that the tolerance does not depend on how the
+    // row is scaled
+    const double slack = static_cast<double>(
+        direction * (static_cast<HighsCDouble>(impliedRowBound) - rowSide));
+    if (slack > 0) {
+      for (const HighsSliceNonzero& nonzero : rowVector)
+        if (!isNegligibleColMove(nonzero.index(),
+                                 slack / std::abs(nonzero.value())))
+          return Result::kOk;
+    }
 
     if (logging_on) analysis_.startPresolveRuleLog(kPresolveRuleForcingRow);
     postsolve_stack.forcingRow(row, rowVector, rowSide, rowType);

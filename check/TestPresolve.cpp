@@ -2465,3 +2465,30 @@ TEST_CASE("issue-3565", "[highs_test_presolve]") {
 
   h.resetThreadScheduler(true);
 }
+
+TEST_CASE("forcing-row-slack-small-coefficients", "[highs_test_presolve]") {
+  // feasible LP whose first row has slack within the primal feasibility
+  // tolerance but tiny coefficients: presolve must not fix its columns
+  //
+  // min x0 + x1 + x2 s.t. 1e-5 (x0 + x1 + x2) = 5e-8, x0 + 2 x1 + 3 x2 = 5e-3
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 2;
+  lp.col_cost_ = {1, 1, 1};
+  lp.col_lower_ = {0, 0, 0};
+  lp.col_upper_ = {kHighsInf, kHighsInf, kHighsInf};
+  lp.row_lower_ = {5e-8, 5e-3};
+  lp.row_upper_ = {5e-8, 5e-3};
+  lp.a_matrix_.format_ = MatrixFormat::kColwise;
+  lp.a_matrix_.start_ = {0, 2, 4, 6};
+  lp.a_matrix_.index_ = {0, 1, 0, 1, 0, 1};
+  lp.a_matrix_.value_ = {1e-5, 1, 1e-5, 2, 1e-5, 3};
+  Highs h;
+  h.setOptionValue("output_flag", dev_run);
+  REQUIRE(h.passModel(lp) == HighsStatus::kOk);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+  REQUIRE(std::fabs(h.getInfo().objective_function_value - 5e-3) < 1e-10);
+
+  h.resetThreadScheduler(true);
+}
