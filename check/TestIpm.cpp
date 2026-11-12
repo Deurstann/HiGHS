@@ -305,3 +305,44 @@ TEST_CASE("test-3512", "[highs_ipm]") {
 
   h.resetThreadScheduler(true);
 }
+
+TEST_CASE("ipx-crossover-after-no-progress", "[highs_ipm]") {
+  // Without presolve and with tight tolerances, the IPM of IPX makes no
+  // progress on greenbea. Crossover still runs from its last iterate, so
+  // simplex cleans up from a basis rather than from the interior point
+  std::string filename =
+      std::string(HIGHS_DIR) + "/check/instances/greenbea.mps";
+  Highs h;
+  // The log, captured by a callback, says which path IPX takes
+  h.setOptionValue("output_flag", true);
+  h.setOptionValue("log_to_console", dev_run);
+  bool crossover_after_no_progress = false;
+  auto logCallback = [&](int callback_type, const std::string& message,
+                         const HighsCallbackOutput*, HighsCallbackInput*,
+                         void*) {
+    if (callback_type == kCallbackLogging &&
+        message.find("Running crossover since IPX makes no progress") !=
+            std::string::npos)
+      crossover_after_no_progress = true;
+  };
+  h.setCallback(logCallback);
+  h.startCallback(kCallbackLogging);
+  h.setOptionValue("solver", kIpxString);
+  h.setOptionValue("run_crossover", kHighsChooseString);
+  h.setOptionValue("presolve", kHighsOffString);
+  h.setOptionValue("ipm_optimality_tolerance", 1e-12);
+  h.setOptionValue("primal_feasibility_tolerance", 1e-10);
+  h.setOptionValue("dual_feasibility_tolerance", 1e-10);
+  REQUIRE(h.readModel(filename) == HighsStatus::kOk);
+  h.run();
+  REQUIRE(crossover_after_no_progress);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+  const HighsInfo& info = h.getInfo();
+  REQUIRE(info.crossover_iteration_count > 0);
+  REQUIRE(info.basis_validity == kBasisValidityValid);
+  const double optimal_objective = -7.2555248130e+07;
+  REQUIRE(std::fabs(info.objective_function_value - optimal_objective) <
+          1e-8 * std::fabs(optimal_objective));
+
+  h.resetThreadScheduler(true);
+}
