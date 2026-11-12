@@ -61,13 +61,23 @@ Int LpSolver::Solve() {
     const bool run_crossover_on = control_.run_crossover() == 1;
     const bool run_crossover_choose = control_.run_crossover() == -1;
     const bool run_crossover_not_off = run_crossover_choose || run_crossover_on;
+    // An IPM that makes no progress still hands its iterate and the basis of
+    // its preconditioner to crossover, unless crossover is off, provided it
+    // iterated with that preconditioner: an initial phase that diverged
+    // stops the main IPM before its first iteration
+    const bool crossover_after_no_progress =
+      info_.status_ipm == IPX_STATUS_no_progress && run_crossover_not_off &&
+      basis_ && iterate_ && info_.kktiter2 > 0;
     const bool run_crossover =
       (info_.status_ipm == IPX_STATUS_optimal && run_crossover_on) ||
-      (info_.status_ipm == IPX_STATUS_imprecise && run_crossover_not_off);
+      (info_.status_ipm == IPX_STATUS_imprecise && run_crossover_not_off) ||
+      crossover_after_no_progress;
     //        if ((info_.status_ipm == IPX_STATUS_optimal ||
     //             info_.status_ipm == IPX_STATUS_imprecise) && run_crossover_on) {
     if (run_crossover) {
-      if (run_crossover_on) {
+      if (crossover_after_no_progress) {
+	control_.hLog("Running crossover since IPX makes no progress\n");
+      } else if (run_crossover_on) {
 	control_.hLog("Running crossover as requested\n");
       } else if (run_crossover_choose) {
 	assert(info_.status_ipm == IPX_STATUS_imprecise);
@@ -77,6 +87,7 @@ Int LpSolver::Solve() {
       }
       BuildCrossoverStartingPoint();
       RunCrossover();
+      if (crossover_after_no_progress) AssessCrossoverAfterNoProgress();
     }
     if (basis_) {
       info_.ftran_sparse = basis_->frac_ftran_sparse();
@@ -635,6 +646,20 @@ void LpSolver::RunCrossover() {
     if (info_.primal_infeas > control_.pfeasibility_tol() ||
         info_.dual_infeas > control_.dfeasibility_tol())
         info_.status_crossover = IPX_STATUS_imprecise;
+}
+
+// A basis from the iterate of an IPM without progress, or a crossover stopped
+// by the time limit, makes the IPM solution imprecise, as when crossover starts
+// from an imprecise IPM; a failed crossover leaves the IPM outcome unchanged.
+void LpSolver::AssessCrossoverAfterNoProgress() {
+    if (info_.status_crossover == IPX_STATUS_failed) {
+        control_.hLog("Crossover failed, so keep the interior point\n");
+        info_.status_crossover = IPX_STATUS_not_run;
+        info_.errflag = 0;
+    } else if (info_.status_ipm == IPX_STATUS_no_progress &&
+               info_.status_crossover != IPX_STATUS_not_run) {
+        info_.status_ipm = IPX_STATUS_imprecise;
+    }
 }
 
 void LpSolver::PrintSummary() {

@@ -177,6 +177,7 @@ private:
     void RunMainIPM(IPM& ipm);
     void BuildCrossoverStartingPoint();
     void RunCrossover();
+    void AssessCrossoverAfterNoProgress();
     void PrintSummary();
 
     Control control_;
