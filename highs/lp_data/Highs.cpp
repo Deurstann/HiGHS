@@ -1335,11 +1335,16 @@ HighsStatus Highs::optimizeLpHipoFirst() {
   // An undecided status from HiPO is resolved here, not by optimizeModel()
   const bool allow_unbounded_or_infeasible =
       options_.allow_unbounded_or_infeasible;
+  // The solution is basic, as from simplex, unless crossover is off
+  const std::string run_crossover = options_.run_crossover;
   options_.solver = kHipoString;
   options_.allow_unbounded_or_infeasible = true;
+  if (run_crossover == kHighsChooseString)
+    options_.run_crossover = kHighsOnString;
   HighsStatus status = this->optimizeModel();
   options_.solver = kHighsChooseString;
   options_.allow_unbounded_or_infeasible = allow_unbounded_or_infeasible;
+  options_.run_crossover = run_crossover;
   // After an exception, the solve cannot be repeated
   if (!called_return_from_optimize_model) return status;
   // The iteration counts cover both solves

@@ -586,8 +586,14 @@ TEST_CASE("choose-hipo-first", "[highs_lp_solver]") {
   REQUIRE(h.run() == HighsStatus::kOk);
   REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
   REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
-  // With run_crossover = "on", the solution is basic
+  // With run_crossover = "on" or "choose", the solution is basic
   REQUIRE(h.getBasis().valid);
+  h.clearSolver();
+  h.setOptionValue("run_crossover", kHighsChooseString);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+  REQUIRE(h.getBasis().valid);
+  h.setOptionValue("run_crossover", kHighsOnString);
 
   REQUIRE(h.run() == HighsStatus::kOk);
   REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);

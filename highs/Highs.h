@@ -1890,7 +1890,7 @@ class Highs {
   HighsStatus multiobjectiveSolve();
 
   // Under solver = "choose", an LP without a warm start or simplex
-  // options is solved by HiPO, with presolve rules for HiPO, and by
+  // options is solved by HiPO with crossover (unless it is off), and by
   // simplex if HiPO's outcome is not reliable
   bool chooseHipoFirst() const;
   HighsStatus optimizeLpHipoFirst();
