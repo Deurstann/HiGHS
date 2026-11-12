@@ -84,6 +84,22 @@ void Iterate::computeMu() {
   else
     best_mu = mu;
 }
+double Iterate::meanProduct(bool skip_free) const {
+  double sum = 0.0;
+  Int count = 0;
+  for (Int i = 0; i < model.n(); ++i) {
+    if (skip_free && model.isFree(i)) continue;
+    if (model.hasLb(i)) {
+      sum += xl[i] * zl[i];
+      ++count;
+    }
+    if (model.hasUb(i)) {
+      sum += xu[i] * zu[i];
+      ++count;
+    }
+  }
+  return count > 0 ? sum / count : 0.0;
+}
 void Iterate::computeScaling() {
   scaling.assign(model.n(), 0.0);
 

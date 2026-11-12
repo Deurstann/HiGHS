@@ -218,6 +218,10 @@ class Solver {
   // ===================================================================================
   void makeStep();
 
+  // Move the artificial boxes of free columns and centre their pairs at the
+  // mean product of the other bounds (fallback_mu if there is none).
+  void centreFreeVars(double fallback_mu);
+
   // ===================================================================================
   // Compute the Mehrotra starting point.
   // This requires to solve two linear systems with matrix A*A^T.

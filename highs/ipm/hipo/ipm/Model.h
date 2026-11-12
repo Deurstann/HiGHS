@@ -66,6 +66,8 @@ class Model {
       inf_norm_rows_;
 
   std::vector<Int> free_variables_;
+  // 1 for a free column, whose bounds are artificial
+  std::vector<char> is_free_;
 
   std::vector<double> best_lower_, best_upper_;
 
@@ -92,14 +94,19 @@ class Model {
 
   void nzBounds();
 
-  void adjustFreeVars(std::vector<double>& x, std::vector<double>& xl,
-                      std::vector<double>& xu, const Logger& logger);
+  // The artificial box of a free column follows x: a bound that x has passed
+  // half of moves to 2 * x. Both sides are then centred at mu: slack = distance
+  // to the bound, z = mu / slack.
+  void adjustFreeVars(const std::vector<double>& x, std::vector<double>& xl,
+                      std::vector<double>& xu, std::vector<double>& zl,
+                      std::vector<double>& zu, double mu, const Logger& logger);
 
   void saveBounds();
   void resetBounds();
 
   bool hasLb(Int j) const { return std::isfinite(lower_[j]); }
   bool hasUb(Int j) const { return std::isfinite(upper_[j]); }
+  bool isFree(Int j) const { return is_free_[j]; }
 
   Int m() const { return m_; }
   Int n() const { return n_; }

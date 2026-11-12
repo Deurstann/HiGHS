@@ -82,6 +82,10 @@ struct Iterate {
   // ===================================================================================
   void computeMu();
 
+  // Mean complementarity product over all bounds, or over the bounds of
+  // non-free columns only; 0 if there is no such bound.
+  double meanProduct(bool skip_free) const;
+
   // ===================================================================================
   // Compute diagonal scaling Theta^{-1}
   //  Theta^{-1}_{ii} = zl(i) / xl(i) + zu(i) / xu(i)

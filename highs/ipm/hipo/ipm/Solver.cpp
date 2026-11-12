@@ -205,6 +205,7 @@ isFailure Solver::initialise() {
   chooseNumberOfCorrectors();
 
   if (startingPoint()) return true;
+  centreFreeVars(it_->meanProduct(false));
 
   it_->residual1234();
   it_->computeMu();
@@ -228,8 +229,6 @@ shouldTerminate Solver::prepareIter() {
   if (checkInterrupt()) return true;
 
   ++iter_;
-
-  model_.adjustFreeVars(it_->x, it_->xl, it_->xu, logger_);
 
   it_->clearDir();
 
@@ -540,6 +539,8 @@ double Solver::stepToBoundary(const std::vector<double>& x,
   Int bl = -1;
 
   for (Int i = 0; i < n_; ++i) {
+    // the artificial bounds of free columns never block a step
+    if (model_.isFree(i)) continue;
     if ((lo && model_.hasLb(i)) || (!lo && model_.hasUb(i))) {
       double c = (cor ? (*cor)[i] * weight : 0.0);
       if (x[i] + alpha * (dx[i] + c) < 0.0) {
@@ -598,10 +599,11 @@ void Solver::stepSizes() {
   double max_p = std::min(alpha_xl, alpha_xu);
   double max_d = std::min(alpha_zl, alpha_zu);
 
-  // compute mu with current stepsizes
+  // compute mu with current stepsizes, over the bounds of non-free columns
   double mu_full = 0.0;
   Int num_finite = 0;
   for (Int i = 0; i < n_; ++i) {
+    if (model_.isFree(i)) continue;
     if (model_.hasLb(i)) {
       mu_full += (xl[i] + max_p * dxl[i]) * (zl[i] + max_d * dzl[i]);
       ++num_finite;
@@ -663,10 +665,21 @@ void Solver::makeStep() {
   Clock clock;
   stepSizes();
   it_->makeStep(alpha_primal_, alpha_dual_);
+  // mu expected along the direction, used if all bounds are artificial
+  const double alpha = std::min(alpha_primal_, alpha_dual_);
+  centreFreeVars((1.0 - alpha * (1.0 - sigma_)) * it_->mu);
   it_->residual1234();
   it_->computeMu();
   it_->indicators();
   info_.times[kStepTime] += clock.stop();
+}
+
+void Solver::centreFreeVars(double fallback_mu) {
+  if (model_.freeVars().empty()) return;
+  double mu = it_->meanProduct(true);
+  if (mu <= 0.0) mu = fallback_mu;
+  model_.adjustFreeVars(it_->x, it_->xl, it_->xu, it_->zl, it_->zu, mu,
+                        logger_);
 }
 
 isFailure Solver::startingPoint() {
@@ -948,7 +961,7 @@ void Solver::residualsMcc() {
   // compute right-hand side for mcc
   for (Int i = 0; i < n_; ++i) {
     // res5
-    if (model_.hasLb(i)) {
+    if (model_.hasLb(i) && !model_.isFree(i)) {
       double prod = xlt[i] * zlt[i];
       if (prod < sigma_ * mu * kGammaCorrector) {
         // prod is small, we add something positive to res5
@@ -969,7 +982,7 @@ void Solver::residualsMcc() {
     }
 
     // res6
-    if (model_.hasUb(i)) {
+    if (model_.hasUb(i) && !model_.isFree(i)) {
       double prod = xut[i] * zut[i];
       if (prod < sigma_ * mu * kGammaCorrector) {
         // prod is small, we add something positive to res6

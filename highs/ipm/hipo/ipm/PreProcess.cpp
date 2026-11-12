@@ -638,13 +638,16 @@ void PreprocessFreeVars::apply(Model& model) {
   std::vector<double>& lower = model.lower_;
   std::vector<double>& upper = model.upper_;
   std::vector<Int>& free_variables = model.free_variables_;
+  std::vector<char>& is_free = model.is_free_;
 
   free_variables.clear();
+  is_free.assign(n, 0);
   for (Int i = 0; i < n; ++i) {
     if (!std::isfinite(lower[i]) && !std::isfinite(upper[i]) &&
         lower[i] != upper[i]) {
       // free variable
       free_variables.push_back(i);
+      is_free[i] = 1;
       ++free_vars_count;
       lower[i] = -kFreeVarsInitialBound;
       upper[i] = kFreeVarsInitialBound;

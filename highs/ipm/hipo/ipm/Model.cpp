@@ -414,8 +414,10 @@ void Model::printDense() const {
   printf("offset %6.2f\n", offset_);
 }
 
-void Model::adjustFreeVars(std::vector<double>& x, std::vector<double>& xl,
-                           std::vector<double>& xu, const Logger& logger) {
+void Model::adjustFreeVars(const std::vector<double>& x,
+                           std::vector<double>& xl, std::vector<double>& xu,
+                           std::vector<double>& zl, std::vector<double>& zu,
+                           double mu, const Logger& logger) {
   for (Int i : free_variables_) {
     if (x[i] < lower_[i] * kFreeVarsCloseRatio) {
       // getting close to lower bound
@@ -424,7 +426,6 @@ void Model::adjustFreeVars(std::vector<double>& x, std::vector<double>& xl,
           "Free var %5d is at %8.1e with lb %8.1e, lb changed to %8.1e\n", i,
           x[i], lower_[i], new_lower);
       lower_[i] = new_lower;
-      xl[i] = x[i] - lower_[i];
     }
     if (x[i] > upper_[i] * kFreeVarsCloseRatio) {
       // getting close to upper bound
@@ -433,8 +434,11 @@ void Model::adjustFreeVars(std::vector<double>& x, std::vector<double>& xl,
           "Free var %5d is at %8.1e with ub %8.1e, ub changed to %8.1e\n", i,
           x[i], upper_[i], new_upper);
       upper_[i] = new_upper;
-      xu[i] = upper_[i] - x[i];
     }
+    xl[i] = x[i] - lower_[i];
+    xu[i] = upper_[i] - x[i];
+    zl[i] = mu / xl[i];
+    zu[i] = mu / xu[i];
   }
 }
 
