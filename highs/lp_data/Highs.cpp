@@ -1347,9 +1347,11 @@ HighsStatus Highs::optimizeLpHipoFirst() {
   options_.run_crossover = run_crossover;
   // After an exception, the solve cannot be repeated
   if (!called_return_from_optimize_model) return status;
-  // The iteration counts cover both solves
+  // The iteration counts cover both solves, unless an error has made the
+  // counts of either invalid
   const HighsInfo hipo_info = info_;
   auto addHipoIterations = [&]() {
+    if (!info_.valid || !hipo_info.valid) return;
     info_.ipm_iteration_count += hipo_info.ipm_iteration_count;
     info_.crossover_iteration_count += hipo_info.crossover_iteration_count;
     info_.simplex_iteration_count += hipo_info.simplex_iteration_count;
@@ -1375,10 +1377,16 @@ HighsStatus Highs::optimizeLpHipoFirst() {
   const HighsSolution hipo_solution = solution_;
   const HighsBasis hipo_basis = basis_;
   const HighsStatus hot_start_status = this->optimizeModel();
+  // As above, after an exception, the solve cannot be repeated
+  if (!called_return_from_optimize_model) return hot_start_status;
   if (model_status_ == HighsModelStatus::kOptimal) {
     addHipoIterations();
     return hot_start_status;
   }
+  highsLogUser(options_.log_options, HighsLogType::kInfo,
+               "Simplex from the crossover basis yields model status %s, so "
+               "keep the solution of HiPO\n",
+               modelStatusToString(model_status_).c_str());
   ekk_instance_.clear();
   model_status_ = hipo_model_status;
   info_ = hipo_info;
