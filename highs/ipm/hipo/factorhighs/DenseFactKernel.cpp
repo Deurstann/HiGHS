@@ -41,14 +41,15 @@ static std::pair<Int, double> maxInCol(Int j, Int n, Int m, double* A,
 
 static void staticReg(double& pivot, Int sign, const FHoptions& options,
                       double& totalreg) {
-  // apply static regularisation
+  // apply static regularisation: +reg_d to pivots with positive expected sign,
+  // -reg_p to pivots with negative expected sign (see FactorHighs.h)
 
   double old_pivot = pivot;
   if (sign == 0) sign = pivot > 0 ? 1 : -1;
   if (sign > 0)
-    pivot += options.reg_p;
+    pivot += options.reg_d;
   else
-    pivot -= options.reg_d;
+    pivot -= options.reg_p;
   totalreg = pivot - old_pivot;
 }
 
@@ -115,8 +116,8 @@ static bool blockBunchKaufman(const Int j, Int n, double* A, Int lda,
     res = maxInCol(j, n, r, A, lda);
     double gamma_r = res.second;
     const Int sign_r = sign[r] != 0 ? sign[r] : (A[r + lda * r] > 0 ? 1 : -1);
-    double Arr = sign_r > 0 ? A[r + lda * r] + options.reg_p
-                            : A[r + lda * r] - options.reg_d;
+    double Arr = sign_r > 0 ? A[r + lda * r] + options.reg_d
+                            : A[r + lda * r] - options.reg_p;
 
     if ((std::abs(Ajj) >= kAlphaBK * gamma_j ||
          std::abs(Ajj) * gamma_r >= kAlphaBK * gamma_j * gamma_j)) {
@@ -205,11 +206,8 @@ Int denseFactK(char uplo, Int n, double* A, Int lda, Int* pivot_sign,
 
         if (std::isnan(Ajj)) return kRetInvalidPivot;
 
-        // add regularisation
-        staticReg(Ajj, pivot_sign[j], options, totalreg[j]);
-
         if (!options.pivoting) {
-          // add static regularisation
+          // add static regularisation (pivoting has already added it)
           staticReg(Ajj, pivot_sign[j], options, totalreg[j]);
           data.setMaxReg(std::abs(totalreg[j]));
         }

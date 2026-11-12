@@ -242,6 +242,53 @@ TEST_CASE("test-hipo-linear-solver", "[highs_hipo]") {
   FactorHighs_terminate();
 }
 
+// Static regularisation of a saddle point matrix: -reg_p on the pivots with
+// negative expected sign, +reg_d on those with positive expected sign, added
+// once, and reported as added, with and without pivoting
+TEST_CASE("test-hipo-static-regularisation", "[highs_hipo]") {
+  // K = [-2 0 1; 0 -1 1; 1 1 0], lower triangle in CSC format
+  const int n = 3;
+  const int nz = 5;
+  int ptr[n + 1] = {0, 2, 4, 5};
+  int rows[nz] = {0, 2, 1, 2, 2};
+  double vals[nz] = {-2, 1, -1, 1, 0};
+  int signs[n] = {-1, -1, 1};
+  int perm[n] = {0, 1, 2};
+  const double reg_p = 1e-3;
+  const double reg_d = 1e-2;
+
+  const int num_threads = 0;
+  if (FactorHighs_initialise(num_threads) != 0) return;
+
+  for (int pivoting = 0; pivoting <= 1; pivoting++) {
+    void* S = FactorHighs_symbolic_create();
+    void* FH = FactorHighs_create();
+    FactorHighs_setLogging(FH, dev_run);
+    FactorHighs_setPivoting(FH, pivoting);
+    FactorHighs_setRegularisation(FH, reg_p, reg_d);
+    REQUIRE(FactorHighs_analyse(FH, S, n, nz, rows, ptr, signs, perm) == 0);
+    REQUIRE(FactorHighs_factorise(FH, S, n, nz, rows, ptr, vals) == 0);
+
+    double reg[n];
+    FactorHighs_getRegularisation(FH, reg);
+    REQUIRE(std::fabs(reg[0] + reg_p) < 1e-15);
+    REQUIRE(std::fabs(reg[1] + reg_p) < 1e-15);
+    REQUIRE(std::fabs(reg[2] - reg_d) < 1e-15);
+
+    // the factor solves the system with the reported regularisation
+    double x[n] = {1, 2, 3};
+    REQUIRE(FactorHighs_solve(FH, x, 1) == 0);
+    const double residual[n] = {(-2 + reg[0]) * x[0] + x[2] - 1,
+                                (-1 + reg[1]) * x[1] + x[2] - 2,
+                                x[0] + x[1] + reg[2] * x[2] - 3};
+    for (int i = 0; i < n; ++i) REQUIRE(std::fabs(residual[i]) < 1e-12);
+
+    FactorHighs_symbolic_destroy(S);
+    FactorHighs_destroy(FH);
+  }
+  FactorHighs_terminate();
+}
+
 TEST_CASE("test-hipo-serial-blas", "[highs_hipo]") {
   // Test that HiPO forces OpenBLAS to run in serial, unless
   // hipo_serial_blas is false
