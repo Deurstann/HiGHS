@@ -342,6 +342,54 @@ TEST_CASE("test-hipo-regularisation-after-swap", "[highs_hipo]") {
   FactorHighs_terminate();
 }
 
+// Bunch-Kaufman first moves the largest diagonal (column 1) to position 0,
+// then takes the 1x1 pivot r = 2: the recorded exchanges must give the order
+// actually factorised, so that the solve and the reported regularisation hold
+TEST_CASE("test-hipo-swaps-after-pivot-r", "[highs_hipo]") {
+  // K = [0 1e-6 1e-6; 1e-6 -1e-3 0.15; 1e-6 0.15 1e-3], lower triangle in CSC
+  const int n = 3;
+  const int nz = 6;
+  int ptr[n + 1] = {0, 3, 5, 6};
+  int rows[nz] = {0, 1, 2, 1, 2, 2};
+  double vals[nz] = {0, 1e-6, 1e-6, -1e-3, 0.15, 1e-3};
+  int signs[n] = {1, -1, 1};
+  int perm[n] = {0, 1, 2};
+  const double reg_p = 1e-4;
+  const double reg_d = 1e-3;
+
+  const int num_threads = 0;
+  if (FactorHighs_initialise(num_threads) != 0) return;
+
+  void* S = FactorHighs_symbolic_create();
+  void* FH = FactorHighs_create();
+  FactorHighs_setLogging(FH, dev_run);
+  FactorHighs_setRegularisation(FH, reg_p, reg_d);
+  REQUIRE(FactorHighs_analyse(FH, S, n, nz, rows, ptr, signs, perm) == 0);
+  REQUIRE(FactorHighs_factorise(FH, S, n, nz, rows, ptr, vals) == 0);
+
+  double reg[n];
+  FactorHighs_getRegularisation(FH, reg);
+  REQUIRE(std::fabs(reg[0] - reg_d) < 1e-15);
+  REQUIRE(std::fabs(reg[1] + reg_p) < 1e-15);
+  REQUIRE(std::fabs(reg[2] - reg_d) < 1e-15);
+
+  // residual of the regularised system, relative to the solution
+  double x[n] = {1, 2, 3};
+  REQUIRE(FactorHighs_solve(FH, x, 1) == 0);
+  const double residual[n] = {
+      reg[0] * x[0] + 1e-6 * (x[1] + x[2]) - 1,
+      1e-6 * x[0] + (-1e-3 + reg[1]) * x[1] + 0.15 * x[2] - 2,
+      1e-6 * x[0] + 0.15 * x[1] + (1e-3 + reg[2]) * x[2] - 3};
+  const double x_norm =
+      std::max(std::fabs(x[0]), std::max(std::fabs(x[1]), std::fabs(x[2])));
+  for (int i = 0; i < n; ++i)
+    REQUIRE(std::fabs(residual[i]) < 1e-12 * std::max(1.0, x_norm));
+
+  FactorHighs_symbolic_destroy(S);
+  FactorHighs_destroy(FH);
+  FactorHighs_terminate();
+}
+
 TEST_CASE("test-hipo-serial-blas", "[highs_hipo]") {
   // Test that HiPO forces OpenBLAS to run in serial, unless
   // hipo_serial_blas is false
