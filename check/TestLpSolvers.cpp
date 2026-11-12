@@ -593,6 +593,12 @@ TEST_CASE("choose-hipo-first", "[highs_lp_solver]") {
   REQUIRE(h.run() == HighsStatus::kOk);
   REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
   REQUIRE(h.getBasis().valid);
+  // The options of the user are restored after the solve
+  std::string option_value;
+  h.getOptionValue("solver", option_value);
+  REQUIRE(option_value == kHighsChooseString);
+  h.getOptionValue("run_crossover", option_value);
+  REQUIRE(option_value == kHighsChooseString);
   h.setOptionValue("run_crossover", kHighsOnString);
 
   REQUIRE(h.run() == HighsStatus::kOk);

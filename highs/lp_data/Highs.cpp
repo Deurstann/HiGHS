@@ -1308,7 +1308,9 @@ namespace {
 bool hipoOutcomeNeedsSimplex(const HighsStatus status,
                              const HighsModelStatus model_status,
                              const HighsInfo& info,
-                             const bool allow_unbounded_or_infeasible) {
+                             const bool allow_unbounded_or_infeasible,
+                             const bool basis_required,
+                             const bool basis_valid) {
   if (status == HighsStatus::kError) return true;
   const bool hipo_verdict =
       info.ipm_iteration_count > 0 && info.simplex_iteration_count == 0;
@@ -1324,6 +1326,9 @@ bool hipoOutcomeNeedsSimplex(const HighsStatus status,
       return hipo_verdict;
     case HighsModelStatus::kUnboundedOrInfeasible:
       return hipo_verdict || !allow_unbounded_or_infeasible;
+    case HighsModelStatus::kOptimal:
+      // Presolve used the rules for a basis, but crossover did not run
+      return basis_required && !basis_valid;
     default:
       return false;
   }
@@ -1342,6 +1347,7 @@ HighsStatus Highs::optimizeLpHipoFirst() {
   options_.allow_unbounded_or_infeasible = true;
   if (run_crossover == kHighsChooseString)
     options_.run_crossover = kHighsOnString;
+  const bool basis_required = options_.run_crossover == kHighsOnString;
   HighsStatus status = this->optimizeModel();
   options_.solver = kHighsChooseString;
   options_.allow_unbounded_or_infeasible = allow_unbounded_or_infeasible;
@@ -1358,7 +1364,8 @@ HighsStatus Highs::optimizeLpHipoFirst() {
     info_.simplex_iteration_count += hipo_info.simplex_iteration_count;
   };
   if (hipoOutcomeNeedsSimplex(status, model_status_, info_,
-                              allow_unbounded_or_infeasible)) {
+                              allow_unbounded_or_infeasible, basis_required,
+                              basis_.valid)) {
     highsLogUser(options_.log_options, HighsLogType::kInfo,
                  "HiPO yields model status %s, so solve the LP with simplex\n",
                  modelStatusToString(model_status_).c_str());
