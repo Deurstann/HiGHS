@@ -129,8 +129,15 @@ static bool blockBunchKaufman(const Int j, Int n, double* A, Int lda,
     } else if (std::abs(Arr) >= kAlphaBK * gamma_r) {
       // Use pivot r
 
-      // after the swap, the pivot is the former r, with its expected sign
-      swapCols('U', n, A, lda, j, r, swaps, sign, data);
+      // swaps records one exchange per position: undo the exchange that
+      // brought the largest diagonal to j, then bring the pivot from where it
+      // was. The pivot is the former r, with its expected sign
+      const Int pivot_pos = r == ind_max_diag ? j : r;
+      if (ind_max_diag != j) {
+        swapCols('U', n, A, lda, j, ind_max_diag, swaps, sign, data);
+        swaps[j] = j;
+      }
+      swapCols('U', n, A, lda, j, pivot_pos, swaps, sign, data);
       staticReg(A[j + lda * j], sign_r, options, totalreg[j]);
 
       if (sign_r * A[j + lda * j] < 0) data.setWrongSign(A[j + lda * j]);
