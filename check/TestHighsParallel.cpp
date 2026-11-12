@@ -318,6 +318,28 @@ TEST_CASE("CancelNestedTasks", "[parallel]") {
   HighsTaskExecutor::shutdown();
 }
 
+// With one thread no task is stolen, so a task cancelled by cancelLast() is
+// popped by the next sync() without running, and the one below it still runs
+TEST_CASE("CancelLastTask", "[parallel]") {
+  HighsTaskExecutor::shutdown();
+  highs::parallel::initialize_scheduler(1);
+  bool first_ran = false;
+  bool last_ran = false;
+  {
+    highs::parallel::TaskGroup tg;
+    tg.spawn([&first_ran]() { first_ran = true; });
+    tg.spawn([&last_ran]() { last_ran = true; });
+    tg.cancelLast();
+    tg.sync();
+    REQUIRE(!last_ran);
+    REQUIRE(!first_ran);
+    tg.sync();
+    REQUIRE(first_ran);
+  }
+  REQUIRE(!last_ran);
+  HighsTaskExecutor::shutdown();
+}
+
 TEST_CASE("AvailableCoreCount", "[parallel]") {
   unsigned int cores = highs::parallel::available_core_count();
   REQUIRE(cores > 0);

@@ -99,6 +99,16 @@ class TaskGroup {
       workerDeque->cancelTask(i);
   }
 
+  // Cancels the task that the next sync() pops: it does not run if it has not
+  // started, and a running task stops at its next interrupt check
+  void cancelLast() const {
+    const int last = workerDeque->getCurrentHead() - 1;
+    assert(last >= dequeHead);
+    // A task spawned when the deque was full has already run
+    if (size_t(last) < HighsSchedulerConstants::kTaskArraySize)
+      workerDeque->cancelTask(last);
+  }
+
   ~TaskGroup() noexcept(false) {
     cancel();
 

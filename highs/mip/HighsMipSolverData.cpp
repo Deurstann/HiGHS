@@ -492,6 +492,16 @@ void HighsMipSolverData::startAnalyticCenterComputation(
 
 void HighsMipSolverData::finishAnalyticCenterComputation(
     const highs::parallel::TaskGroup& taskGroup) {
+  if (upper_limit != kHighsInf) {
+    // The centre is a start heuristic: once there is an incumbent or an
+    // objective bound, its task is cancelled and nothing it computed is used
+    taskGroup.cancelLast();
+    taskGroup.sync();
+    analyticCenterComputed = true;
+    analyticCenterStatus = HighsModelStatus::kNotset;
+    analyticCenter.clear();
+    return;
+  }
   if (mipsolver.profiling_->mip_) {
     highsLogUser(mipsolver.options_mip_->log_options, HighsLogType::kInfo,
                  "MIP-Timing: %11.2g - starting  analytic centre synch\n",
@@ -2066,6 +2076,9 @@ restart:
     startSymmetryDetection(tg, symData);
     profiling->stop(kMipClockStartSymmetryDetection);
   }
+  // With an incumbent or an objective bound (always the case for a sub-MIP of
+  // a MIP with an incumbent), the analytic centre is not computed
+  if (upper_limit != kHighsInf) analyticCenterComputed = true;
   if (compute_analytic_centre && !analyticCenterComputed) {
     if (profiling->mip_)
       highsLogUser(
