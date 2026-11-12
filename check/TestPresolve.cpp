@@ -1895,6 +1895,89 @@ TEST_CASE("forcing-column-without-domination", "[highs_test_presolve]") {
   }
 }
 
+// Interior point solutions postsolved through zero cost singletons must keep
+// the row duals: with the duals of nearly active rows set to zero, these LPs
+// ended Unknown with large dual residuals
+TEST_CASE("zero-cost-singleton-dual-postsolve", "[highs_test_presolve]") {
+  std::vector<std::string> solvers = {kIpxString};
+#ifdef HIPO
+  solvers.push_back(kHipoString);
+#endif
+  const std::vector<std::string> models = {"greenbea", "25fv47", "perold"};
+  for (const std::string& solver : solvers) {
+    for (const std::string& model : models) {
+      const std::string model_file =
+          std::string(HIGHS_DIR) + "/check/instances/" + model + ".mps";
+      Highs h;
+      h.setOptionValue("output_flag", dev_run);
+      REQUIRE(h.setOptionValue("presolve_rule_logging", true) ==
+              HighsStatus::kOk);
+      REQUIRE(h.setOptionValue(kSolverString, solver) == HighsStatus::kOk);
+      REQUIRE(h.setOptionValue("run_crossover", kHighsOffString) ==
+              HighsStatus::kOk);
+      REQUIRE(h.readModel(model_file) == HighsStatus::kOk);
+      REQUIRE(h.run() == HighsStatus::kOk);
+      REQUIRE(
+          h.getPresolveLog().rule[kPresolveRuleZeroCostSingleton].col_removed >
+          0);
+      REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+      h.resetThreadScheduler(true);
+    }
+  }
+}
+
+// Ranged row 0 <= x1 + x2 + s <= 1e-3 with zero cost s in [0, 10]: the
+// reduced row is [-10, 1e-3]. An interior reduced solution 2e-3 above its
+// lower bound, with row dual 1, postsolved without a basis, must give a row
+// and an s that both stay on the side selected by their duals
+TEST_CASE("zero-cost-singleton-ranged-row-postsolve", "[highs_test_presolve]") {
+  HighsLp lp;
+  lp.num_col_ = 3;
+  lp.num_row_ = 1;
+  lp.col_cost_ = {1, 1, 0};
+  lp.col_lower_ = {-10, -10, 0};
+  lp.col_upper_ = {10, 10, 10};
+  lp.row_lower_ = {0};
+  lp.row_upper_ = {1e-3};
+  lp.a_matrix_.start_ = {0, 1, 2, 3};
+  lp.a_matrix_.index_ = {0, 0, 0};
+  lp.a_matrix_.value_ = {1, 1, 1};
+  Highs h;
+  h.setOptionValue("output_flag", dev_run);
+  // Only the zero cost singleton rule, which simplex options allow
+  REQUIRE(h.setOptionValue(kSolverString, kSimplexString) == HighsStatus::kOk);
+  const HighsInt all_rules = (HighsInt{1} << kPresolveRuleCount) - 1;
+  REQUIRE(h.setOptionValue(
+              "presolve_rule_off",
+              all_rules & ~(HighsInt{1} << kPresolveRuleZeroCostSingleton)) ==
+          HighsStatus::kOk);
+  REQUIRE(h.passModel(lp) == HighsStatus::kOk);
+  REQUIRE(h.presolve() == HighsStatus::kOk);
+  const HighsLp& presolved_lp = h.getPresolvedLp();
+  REQUIRE(presolved_lp.num_col_ == 2);
+  REQUIRE(presolved_lp.num_row_ == 1);
+
+  HighsSolution solution;
+  solution.value_valid = true;
+  solution.dual_valid = true;
+  solution.col_value = {-4.999, -4.999};
+  solution.col_dual = {0, 0};
+  solution.row_value = {-9.998};
+  solution.row_dual = {1};
+  REQUIRE(h.postsolve(solution) != HighsStatus::kError);
+  const HighsSolution& postsolved = h.getSolution();
+  const double row_value = postsolved.col_value[0] + postsolved.col_value[1] +
+                           postsolved.col_value[2];
+  REQUIRE(row_value >= 0);
+  REQUIRE(row_value <= 0.5e-3);
+  REQUIRE(postsolved.col_value[2] >= 5);
+  REQUIRE(postsolved.col_value[2] <= 10);
+  REQUIRE(postsolved.col_dual[2] == -1);
+  REQUIRE(postsolved.row_dual[0] == 1);
+  REQUIRE(h.getInfo().max_dual_infeasibility <= 1e-7);
+  h.resetThreadScheduler(true);
+}
+
 TEST_CASE("issue-3359", "[highs_test_presolve]") {
   const std::string model = "3359";
   std::string model_file =

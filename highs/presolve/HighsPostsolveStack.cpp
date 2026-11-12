@@ -1685,6 +1685,28 @@ void HighsPostsolveStack::ZeroObjSingletonContinuousCol::undo(
   for (const auto& rowVal : rowValues)
     act += rowVal.value * solution.col_value[rowVal.index];
 
+  // Without a basis (e.g. an interior point), keep the dual y of a nearly
+  // active reduced row: the column gets the reduced cost -coef * y, and the
+  // slack of the reduced row is shared between row and column in proportion
+  // to their widths, which keeps their dual signs and their complementarity
+  const double row_dual = solution.dual_valid ? solution.row_dual[row] : 0;
+  const double reduced_bound = row_dual > 0 ? new_row_lb : new_row_ub;
+  if (!basis.valid && row_dual != 0 && std::abs(reduced_bound) < kHighsInf) {
+    const double reduced_slack = row_dual > 0
+                                     ? static_cast<double>(act - new_row_lb)
+                                     : static_cast<double>(new_row_ub - act);
+    const double row_width = origRowUpper - origRowLower;
+    const double col_width = std::abs(coef) * (ub - lb);
+    const double row_share =
+        row_width > 0 ? reduced_slack * row_width / (row_width + col_width) : 0;
+    const double row_value =
+        row_dual > 0 ? origRowLower + row_share : origRowUpper - row_share;
+    const double col_value = static_cast<double>((row_value - act) / coef);
+    solution.col_value[col] = std::min(ub, std::max(lb, col_value));
+    solution.col_dual[col] = -coef * row_dual;
+    return;
+  }
+
   // Find a suitable bound within the domain
   double col_value = kHighsInf;
   // Detemine whether the row was at its lower or upper bound by

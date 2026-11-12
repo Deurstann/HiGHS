@@ -509,9 +509,6 @@ void HPresolve::chooseRules() {
       // Cannot use kPresolveRuleDualFixing rule (see
       // test-dual-fixing-dual-postsolve)
       ruleOffForPostsolve("dual", kPresolveRuleDualFixing);
-      // Cannot use kPresolveRuleZeroCostSingleton (see
-      // hipo-ipx-pdlp-no-crossover)
-      ruleOffForPostsolve("dual", kPresolveRuleZeroCostSingleton);
     }
     if (mayRequireBasisPostsolve(options)) {
       may_require_basis_postsolve_ = true;
