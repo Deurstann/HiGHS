@@ -1274,8 +1274,60 @@ HighsStatus Highs::optimizeHighs() {
   // Level 1 of Highs::run()
   //
   // Move the "mods" to here
-  return this->multi_linear_objective_.size() ? this->multiobjectiveSolve()
-                                              : this->optimizeModel();
+  if (this->multi_linear_objective_.size()) return this->multiobjectiveSolve();
+  return this->chooseHipoFirst() ? this->optimizeLpHipoFirst()
+                                 : this->optimizeModel();
+}
+
+bool Highs::chooseHipoFirst() const {
+  if (options_.solver != kHighsChooseString) return false;
+  if (model_.isQp() || model_.isMip()) return false;
+  if (options_.run_centring || options_.icrash) return false;
+  // A warm start from a basis or a solution uses simplex
+  const bool warm_start =
+      options_.use_warm_start && (basis_.useful || solution_.value_valid);
+  if (warm_start) return false;
+  return HighsExternalApi::isAvailable<HighsExtras::hipo>();
+}
+
+namespace {
+// Model statuses of a HiPO solve that simplex should confirm or
+// improve. HiPO detects infeasibility heuristically
+bool hipoStatusNeedsSimplex(const HighsModelStatus model_status) {
+  switch (model_status) {
+    case HighsModelStatus::kNotset:
+    case HighsModelStatus::kSolveError:
+    case HighsModelStatus::kPostsolveError:
+    case HighsModelStatus::kMemoryLimit:
+    case HighsModelStatus::kInfeasible:
+    case HighsModelStatus::kUnboundedOrInfeasible:
+    case HighsModelStatus::kUnbounded:
+    case HighsModelStatus::kUnknown:
+      return true;
+    default:
+      return false;
+  }
+}
+}  // namespace
+
+HighsStatus Highs::optimizeLpHipoFirst() {
+  options_.solver = kHipoString;
+  HighsStatus status = this->optimizeModel();
+  options_.solver = kHighsChooseString;
+  if (!hipoStatusNeedsSimplex(model_status_)) return status;
+  highsLogUser(options_.log_options, HighsLogType::kInfo,
+               "HiPO yields model status %s, so solve the LP with simplex\n",
+               modelStatusToString(model_status_).c_str());
+  // The iteration counts cover both solves
+  const HighsInt ipm_iteration_count = info_.ipm_iteration_count;
+  const HighsInt crossover_iteration_count = info_.crossover_iteration_count;
+  const HighsInt simplex_iteration_count = info_.simplex_iteration_count;
+  this->clearSolver();
+  status = this->optimizeModel();
+  info_.ipm_iteration_count += ipm_iteration_count;
+  info_.crossover_iteration_count += crossover_iteration_count;
+  info_.simplex_iteration_count += simplex_iteration_count;
+  return status;
 }
 
 HighsStatus Highs::optimizeLp() {
