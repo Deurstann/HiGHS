@@ -562,7 +562,9 @@ void Iterate::residuals6x6(const NewtonDir& d) {
   }
   model.A().alphaProductPlusY(-1.0, dy, ires.r4, true);
   for (Int i = 0; i < n; ++i) {
-    double reg_p = Rp ? Rp[i] : regul.primal;
+    // the factor records the primal regularisation as a negative increment of
+    // the pivot of the augmented system
+    double reg_p = Rp ? -Rp[i] : regul.primal;
     ires.r4[i] += reg_p * dx[i];
   }
   if (model.qp()) model.Q().alphaProductPlusY(model.sense(), dx, ires.r4);
