@@ -433,6 +433,10 @@ void HighsMipSolverData::startAnalyticCenterComputation(
     const std::string ipm_solver = use_hipo ? kHipoString : kIpxString;
     ipm.setOptionValue("solver", ipm_solver);
     ipm.setOptionValue("ipm_iteration_limit", 200);
+    ipm.setOptionValue(
+        "time_limit",
+        std::max(mipsolver.options_mip_->time_limit - mipsolver.timer_.read(),
+                 0.1));
     ipm.setOptionValue("run_crossover", kHighsOffString);
     ipm.setOptionValue("run_centring", true);
     HighsLp lpmodel(*mipsolver.model_);
