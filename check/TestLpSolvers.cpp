@@ -627,6 +627,15 @@ TEST_CASE("choose-hipo-first", "[highs_lp_solver]") {
   REQUIRE(h.getModelStatus() == HighsModelStatus::kInfeasible);
   REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
 
+  // So is its verdict on an unbounded LP
+  lp.col_cost_ = {-1, -1};
+  lp.row_lower_ = {-kHighsInf, -kHighsInf};
+  lp.row_upper_ = {1, 1};
+  lp.a_matrix_.value_ = {1, -1, 1, -1};
+  REQUIRE(h.passModel(lp) == HighsStatus::kOk);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kUnbounded);
+
   h.resetThreadScheduler(true);
 }
 
