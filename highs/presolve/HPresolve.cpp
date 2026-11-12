@@ -377,6 +377,7 @@ void HPresolve::chooseRules() {
     setRulesForFullMode();
     // Switch off the rules not used in presolve light
     allow_rule_[kPresolveRuleDominatedCol] = false;
+    allow_rule_[kPresolveRuleForcingCol] = false;
     allow_rule_[kPresolveRuleDependentEquations] = false;
     allow_rule_[kPresolveRuleDependentFreeCols] = false;
     allow_rule_[kPresolveRuleAggregator] = false;
@@ -2406,8 +2407,9 @@ HPresolve::Result HPresolve::singletonCol(HighsPostsolveStack& postsolve_stack,
     return Result::kOk;
   }
 
-  if (this->allow_rule_[kPresolveRuleDominatedCol]) {
-    // detect strong / weak domination
+  if (this->allow_rule_[kPresolveRuleDominatedCol] ||
+      this->allow_rule_[kPresolveRuleForcingCol]) {
+    // detect strong / weak domination and forcing columns
     // Pass handleSingletonRows = false
     HPRESOLVE_TIMED_CHECKED_CALL_IF(
         timing, kPresolveClockSingletonColDominated,
@@ -3533,8 +3535,9 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
       break;
   }
 
-  if (this->allow_rule_[kPresolveRuleDominatedCol]) {
-    // detect strong / weak domination
+  if (this->allow_rule_[kPresolveRuleDominatedCol] ||
+      this->allow_rule_[kPresolveRuleForcingCol]) {
+    // detect strong / weak domination and forcing columns
     HPRESOLVE_TIMED_CHECKED_CALL_IF(timing, kPresolveClockInitialColDominated,
                                     detectDominatedCol(postsolve_stack, col));
     if (colDeleted[col]) return Result::kOk;
@@ -3636,7 +3639,8 @@ HPresolve::Result HPresolve::colPresolve(HighsPostsolveStack& postsolve_stack,
 HPresolve::Result HPresolve::detectDominatedCol(
     HighsPostsolveStack& postsolve_stack, HighsInt col,
     bool handleSingletonRows) {
-  assert(allow_rule_[kPresolveRuleDominatedCol]);
+  assert(allow_rule_[kPresolveRuleDominatedCol] ||
+         allow_rule_[kPresolveRuleForcingCol]);
   assert(!colDeleted[col]);
   // handleSingletonRows is true by default, but set false when
   // calling detectDominatedCol in HPresolve::singletonCol
@@ -3646,9 +3650,6 @@ HPresolve::Result HPresolve::detectDominatedCol(
       -impliedDualRowBounds.getSumLower(col, -model->col_cost_[col]);
   double colDualLower =
       -impliedDualRowBounds.getSumUpper(col, -model->col_cost_[col]);
-
-  // compute dynamism
-  HighsCDouble dynamism = computeDynamism(getColumnVector(col));
 
   const bool logging_on = analysis_.logging_on_;
 
@@ -3676,14 +3677,16 @@ HPresolve::Result HPresolve::detectDominatedCol(
   };
 
   auto weaklyDominatedCol = [&](HighsInt col, double dualBound, double bound,
-                                double otherBound, const HighsCDouble& dynamism,
-                                HighsInt direction) {
+                                double otherBound, HighsInt direction) {
     // column is weakly dominated if the bounds on the column dual satisfy:
     // 1. lower bound >= -dual feasibility tolerance (direction =  1) or
     // 2. upper bound <=  dual feasibility tolerance (direction = -1).
     if (direction * dualBound < -options->dual_feasibility_tolerance)
       return Result::kOk;
     if (direction * bound != -kHighsInf) {
+      // a weakly dominated column is fixed only if the rule is allowed
+      if (!this->allow_rule_[kPresolveRuleWeaklyDominatedCol])
+        return Result::kOk;
       if (logging_on)
         analysis_.startPresolveRuleLog(kPresolveRuleWeaklyDominatedCol);
       // fix variable
@@ -3710,6 +3713,7 @@ HPresolve::Result HPresolve::detectDominatedCol(
                                         col, -model->col_cost_[col])
                                   : -impliedDualRowBounds.getSumLowerOrig(
                                         col, -model->col_cost_[col]);
+      const HighsCDouble dynamism = computeDynamism(getColumnVector(col));
       if (std::abs(boundOnColDual) <=
           std::max(static_cast<double>(options->dual_feasibility_tolerance /
                                        dynamism),
@@ -3747,25 +3751,29 @@ HPresolve::Result HPresolve::detectDominatedCol(
     return Result::kOk;
   };
 
-  // check for dominated column
-  HPRESOLVE_CHECKED_CALL(
-      dominatedCol(col, colDualLower, model->col_lower_[col], HighsInt{1}));
-  if (colDeleted[col]) return Result::kOk;
+  if (this->allow_rule_[kPresolveRuleDominatedCol]) {
+    // check for dominated column
+    HPRESOLVE_CHECKED_CALL(
+        dominatedCol(col, colDualLower, model->col_lower_[col], HighsInt{1}));
+    if (colDeleted[col]) return Result::kOk;
 
-  HPRESOLVE_CHECKED_CALL(
-      dominatedCol(col, colDualUpper, model->col_upper_[col], HighsInt{-1}));
-  if (colDeleted[col]) return Result::kOk;
+    HPRESOLVE_CHECKED_CALL(
+        dominatedCol(col, colDualUpper, model->col_upper_[col], HighsInt{-1}));
+    if (colDeleted[col]) return Result::kOk;
+  }
 
-  if (this->allow_rule_[kPresolveRuleWeaklyDominatedCol]) {
-    // check for weakly dominated column
+  if (this->allow_rule_[kPresolveRuleWeaklyDominatedCol] ||
+      this->allow_rule_[kPresolveRuleForcingCol]) {
+    // check for weakly dominated column, or forcing column when the bound to
+    // fix the column at is infinite
     HPRESOLVE_CHECKED_CALL(
         weaklyDominatedCol(col, colDualLower, model->col_lower_[col],
-                           model->col_upper_[col], dynamism, HighsInt{1}));
+                           model->col_upper_[col], HighsInt{1}));
     if (colDeleted[col]) return Result::kOk;
 
     HPRESOLVE_CHECKED_CALL(
         weaklyDominatedCol(col, colDualUpper, model->col_upper_[col],
-                           model->col_lower_[col], dynamism, HighsInt{-1}));
+                           model->col_lower_[col], HighsInt{-1}));
   }
   return Result::kOk;
 }

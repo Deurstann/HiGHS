@@ -1855,6 +1855,46 @@ TEST_CASE("issue-3342", "[highs_test_presolve]") {
   debugPrimalDualPresolve(lp, reduces_to_empty, options);
 }
 
+// Column x has no lower bound, zero cost and positive coefficients in rows
+// with no lower bound: it is a forcing column, removed with rows r1 and r2.
+// It must be found although the dominated column rule is off for every LP
+// solver (see issue-3342), with and without basis postsolve
+TEST_CASE("forcing-column-without-domination", "[highs_test_presolve]") {
+  // min -y1 - y2 - y3 s.t. r1: x + y1 + z/2 <= 4, r2: 2x + y2 - z <= 6,
+  // r3: y1 + y2 + y3 <= 9, r4: z + y3 >= 1, x <= 10, y in [0, 5], z in [0, 3]
+  HighsLp lp;
+  lp.num_col_ = 5;
+  lp.num_row_ = 4;
+  lp.col_cost_ = {0, -1, -1, -1, 0};
+  lp.col_lower_ = {-kHighsInf, 0, 0, 0, 0};
+  lp.col_upper_ = {10, 5, 5, 5, 3};
+  lp.row_lower_ = {-kHighsInf, -kHighsInf, -kHighsInf, 1};
+  lp.row_upper_ = {4, 6, 9, kHighsInf};
+  lp.a_matrix_.start_ = {0, 2, 4, 6, 8, 11};
+  lp.a_matrix_.index_ = {0, 1, 0, 2, 1, 2, 2, 3, 0, 1, 3};
+  lp.a_matrix_.value_ = {1, 2, 1, 1, 1, 1, 1, 1, 0.5, -1, 1};
+  const double optimal_objective = -9;
+  const std::vector<std::string> solvers = {kSimplexString, kIpxString};
+  for (const std::string& solver : solvers) {
+    for (const std::string& crossover : {kHighsOffString, kHighsOnString}) {
+      Highs h;
+      h.setOptionValue("output_flag", dev_run);
+      REQUIRE(h.setOptionValue("presolve_rule_logging", true) ==
+              HighsStatus::kOk);
+      REQUIRE(h.setOptionValue(kSolverString, solver) == HighsStatus::kOk);
+      REQUIRE(h.setOptionValue("run_crossover", crossover) == HighsStatus::kOk);
+      REQUIRE(h.passModel(lp) == HighsStatus::kOk);
+      REQUIRE(h.run() == HighsStatus::kOk);
+      REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+      REQUIRE(h.getPresolveLog().rule[kPresolveRuleForcingCol].row_removed ==
+              2);
+      REQUIRE(std::fabs(h.getInfo().objective_function_value -
+                        optimal_objective) < 1e-7);
+      h.resetThreadScheduler(true);
+    }
+  }
+}
+
 TEST_CASE("issue-3359", "[highs_test_presolve]") {
   const std::string model = "3359";
   std::string model_file =
