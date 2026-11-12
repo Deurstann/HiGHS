@@ -129,24 +129,24 @@ static bool blockBunchKaufman(const Int j, Int n, double* A, Int lda,
     } else if (std::abs(Arr) >= kAlphaBK * gamma_r) {
       // Use pivot r
 
+      // after the swap, the pivot is the former r, with its expected sign
       swapCols('U', n, A, lda, j, r, swaps, sign, data);
-      staticReg(A[j + lda * j], sign_j, options, totalreg[j]);
+      staticReg(A[j + lda * j], sign_r, options, totalreg[j]);
 
-      if (sign_j * A[j + lda * j] < 0) data.setWrongSign(A[j + lda * j]);
+      if (sign_r * A[j + lda * j] < 0) data.setWrongSign(A[j + lda * j]);
 
     } else {
       // Use 2x2 pivot (j,r)
 
-      const Int sign_jp1 = sign[j + 1] != 0
-                               ? sign[j + 1]
-                               : (A[j + 1 + lda * (j + 1)] > 0 ? 1 : -1);
+      // after the swap, the second pivot is the former r, with its expected
+      // sign
       swapCols('U', n, A, lda, j + 1, r, swaps, sign, data);
       flag_2x2 = true;
       staticReg(A[j + lda * j], sign_j, options, totalreg[j]);
-      staticReg(A[j + 1 + lda * (j + 1)], sign_jp1, options, totalreg[j + 1]);
+      staticReg(A[j + 1 + lda * (j + 1)], sign_r, options, totalreg[j + 1]);
 
       if (sign_j * A[j + lda * j] < 0) data.setWrongSign(A[j + lda * j]);
-      if (sign_jp1 * A[j + 1 + lda * (j + 1)] < 0)
+      if (sign_r * A[j + 1 + lda * (j + 1)] < 0)
         data.setWrongSign(A[j + 1 + lda * (j + 1)]);
     }
   }

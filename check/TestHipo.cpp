@@ -289,6 +289,59 @@ TEST_CASE("test-hipo-static-regularisation", "[highs_hipo]") {
   FactorHighs_terminate();
 }
 
+// A 2x2 pivot (0, 2) taken across column 1 swaps columns 1 and 2: the dual
+// pivot moved to position 1 must keep its own regularisation, +reg_d
+TEST_CASE("test-hipo-regularisation-after-swap", "[highs_hipo]") {
+  // K = [-1e-3 1e-6 1; 1e-6 -1e-4 1e-6; 1 1e-6 0], lower triangle in CSC
+  const int n = 3;
+  const int nz = 6;
+  int ptr[n + 1] = {0, 3, 5, 6};
+  int rows[nz] = {0, 1, 2, 1, 2, 2};
+  double vals[nz] = {-1e-3, 1e-6, 1, -1e-4, 1e-6, 0};
+  int signs[n] = {-1, -1, 1};
+  int perm[n] = {0, 1, 2};
+  const double reg_p = 1e-4;
+  const double reg_d = 1e-3;
+
+  const int num_threads = 0;
+  if (FactorHighs_initialise(num_threads) != 0) return;
+
+  void* S = FactorHighs_symbolic_create();
+  void* FH = FactorHighs_create();
+  FactorHighs_setLogging(FH, dev_run);
+  FactorHighs_setRegularisation(FH, reg_p, reg_d);
+  REQUIRE(FactorHighs_analyse(FH, S, n, nz, rows, ptr, signs, perm) == 0);
+  REQUIRE(FactorHighs_factorise(FH, S, n, nz, rows, ptr, vals) == 0);
+
+  double reg[n];
+  FactorHighs_getRegularisation(FH, reg);
+  REQUIRE(std::fabs(reg[0] + reg_p) < 1e-15);
+  REQUIRE(std::fabs(reg[1] + reg_p) < 1e-15);
+  REQUIRE(std::fabs(reg[2] - reg_d) < 1e-15);
+  FactorHighs_symbolic_destroy(S);
+  FactorHighs_destroy(FH);
+
+  // K = [-1e-3 0.15; 0.15 1e-3]: the 1x1 pivot r = 1 is taken, the dual pivot
+  // moved to position 0 keeps +reg_d
+  int ptr2[3] = {0, 2, 3};
+  int rows2[3] = {0, 1, 1};
+  double vals2[3] = {-1e-3, 0.15, 1e-3};
+  int signs2[2] = {-1, 1};
+  S = FactorHighs_symbolic_create();
+  FH = FactorHighs_create();
+  FactorHighs_setLogging(FH, dev_run);
+  FactorHighs_setRegularisation(FH, reg_p, reg_d);
+  REQUIRE(FactorHighs_analyse(FH, S, 2, 3, rows2, ptr2, signs2, perm) == 0);
+  REQUIRE(FactorHighs_factorise(FH, S, 2, 3, rows2, ptr2, vals2) == 0);
+  FactorHighs_getRegularisation(FH, reg);
+  REQUIRE(std::fabs(reg[0] + reg_p) < 1e-15);
+  REQUIRE(std::fabs(reg[1] - reg_d) < 1e-15);
+
+  FactorHighs_symbolic_destroy(S);
+  FactorHighs_destroy(FH);
+  FactorHighs_terminate();
+}
+
 TEST_CASE("test-hipo-serial-blas", "[highs_hipo]") {
   // Test that HiPO forces OpenBLAS to run in serial, unless
   // hipo_serial_blas is false
