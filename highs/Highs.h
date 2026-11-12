@@ -1889,8 +1889,9 @@ class Highs {
       const HighsStatus return_status, HighsInt original_lp_num_row);
   HighsStatus multiobjectiveSolve();
 
-  // Under solver = "choose", an LP without a warm start is solved by
-  // HiPO, choosing presolve rules for HiPO, with simplex as fallback
+  // Under solver = "choose", an LP without a warm start or simplex
+  // options is solved by HiPO, with presolve rules for HiPO, and by
+  // simplex if HiPO's outcome is not reliable
   bool chooseHipoFirst() const;
   HighsStatus optimizeLpHipoFirst();
 
