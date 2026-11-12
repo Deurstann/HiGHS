@@ -133,6 +133,8 @@ void Iterate::products() {
   num_large = 0;
 
   for (Int i = 0; i < model.n(); ++i) {
+    // the artificial pairs of free columns are centred by construction
+    if (model.isFree(i)) continue;
     if (model.hasLb(i)) {
       double prod = xl[i] * zl[i] / mu;
       min_prod = std::min(min_prod, prod);

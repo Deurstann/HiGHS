@@ -613,7 +613,7 @@ void Solver::stepSizes() {
       ++num_finite;
     }
   }
-  mu_full /= num_finite;
+  if (num_finite > 0) mu_full /= num_finite;
   mu_full /= gamma_a;
 
   // compute new stepsizes based on Mehrotra heuristic
