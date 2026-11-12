@@ -1283,6 +1283,8 @@ bool Highs::chooseHipoFirst() const {
   if (options_.solver != kHighsChooseString) return false;
   if (model_.isQp() || model_.isMip()) return false;
   if (options_.run_centring || options_.icrash) return false;
+  // The objective bound terminates the dual simplex solver
+  if (options_.objective_bound < kHighsInf) return false;
   // A warm start from a basis or a solution uses simplex
   const bool warm_start =
       options_.use_warm_start && (basis_.useful || solution_.value_valid);
@@ -1314,15 +1316,23 @@ HighsStatus Highs::optimizeLpHipoFirst() {
   options_.solver = kHipoString;
   HighsStatus status = this->optimizeModel();
   options_.solver = kHighsChooseString;
-  if (!hipoStatusNeedsSimplex(model_status_)) return status;
-  highsLogUser(options_.log_options, HighsLogType::kInfo,
-               "HiPO yields model status %s, so solve the LP with simplex\n",
-               modelStatusToString(model_status_).c_str());
+  const bool solve_with_simplex =
+      status == HighsStatus::kError || hipoStatusNeedsSimplex(model_status_);
+  // Unless presolve has reduced the LP, a basis from crossover has no
+  // invertible representation: hot start simplex to get one
+  const bool hot_start_simplex = !solve_with_simplex && basis_.valid &&
+                                 !ekk_instance_.status_.has_invert &&
+                                 options_.use_warm_start;
+  if (!solve_with_simplex && !hot_start_simplex) return status;
+  if (solve_with_simplex)
+    highsLogUser(options_.log_options, HighsLogType::kInfo,
+                 "HiPO yields model status %s, so solve the LP with simplex\n",
+                 modelStatusToString(model_status_).c_str());
   // The iteration counts cover both solves
   const HighsInt ipm_iteration_count = info_.ipm_iteration_count;
   const HighsInt crossover_iteration_count = info_.crossover_iteration_count;
   const HighsInt simplex_iteration_count = info_.simplex_iteration_count;
-  this->clearSolver();
+  if (solve_with_simplex) this->clearSolver();
   status = this->optimizeModel();
   info_.ipm_iteration_count += ipm_iteration_count;
   info_.crossover_iteration_count += crossover_iteration_count;

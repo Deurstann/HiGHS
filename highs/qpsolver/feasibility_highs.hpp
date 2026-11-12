@@ -69,6 +69,8 @@ static void computeStartingPointHighs(
     // set HiGHS to be silent
     highs.setOptionValue("output_flag", false);
     highs.setOptionValue("presolve", kHighsOnString);
+    // The starting point is a vertex
+    highs.setOptionValue("solver", kSimplexString);
     // Set the residual time limit
     const double use_time_limit =
         std::max(settings.time_limit - timer.read(), 0.001);
