@@ -117,35 +117,38 @@ class Symbolic {
   friend class Analyse;
 
  public:
-  // provide const access to symbolic factorisation
+  // provide const access to symbolic factorisation; defined here so that the
+  // factorisation and solve loops inline them in every build
   bool empty() const { return empty_; }
-  Int64 nz() const;
-  double flops() const;
-  double spops() const;
-  double critops() const;
-  Int size() const;
-  Int sn() const;
-  double fillin() const;
-  Int rows(Int64 i) const;
-  Int64 ptr(Int i) const;
-  Int snStart(Int i) const;
-  Int snParent(Int i) const;
-  Int relindCols(Int i) const;
-  Int relindClique(Int i, Int j) const;
-  Int consecutiveSums(Int i, Int j) const;
-  Int64 cliqueBlockStart(Int sn, Int bl) const;
-  Int64 cliqueSize(Int sn) const;
-  Int64 maxStackSize() const;
-  Int largestFront() const;
-  Int depth() const;
-  double solveTreeSpeedup() const;
-  double storage() const;
-  const std::vector<Int64>& ptr() const;
-  const std::vector<Int>& iperm() const;
-  const std::vector<Int>& snParent() const;
-  const std::vector<Int>& snStart() const;
-  const std::vector<Int>& pivotSign() const;
-  const TreeSchedule& schedule() const;
+  Int64 nz() const { return nz_; }
+  double flops() const { return flops_; }
+  double spops() const { return spops_; }
+  double critops() const { return critops_; }
+  Int size() const { return n_; }
+  Int sn() const { return sn_; }
+  double fillin() const { return fillin_; }
+  Int rows(Int64 i) const { return rows_[i]; }
+  Int64 ptr(Int i) const { return ptr_[i]; }
+  Int snStart(Int i) const { return sn_start_[i]; }
+  Int snParent(Int i) const { return sn_parent_[i]; }
+  Int relindCols(Int i) const { return relind_cols_[i]; }
+  Int relindClique(Int i, Int j) const { return relind_clique_[i][j]; }
+  Int consecutiveSums(Int i, Int j) const { return consecutive_sums_[i][j]; }
+  Int64 cliqueBlockStart(Int sn, Int bl) const {
+    return clique_block_start_[sn][bl];
+  }
+  Int64 cliqueSize(Int sn) const { return clique_block_start_[sn].back(); }
+  Int64 maxStackSize() const { return max_stack_size_; }
+  Int largestFront() const { return largest_front_; }
+  Int depth() const { return tree_depth_; }
+  double solveTreeSpeedup() const { return ops_solve_ / critops_solve_; }
+  double storage() const { return serial_storage_; }
+  const std::vector<Int64>& ptr() const { return ptr_; }
+  const std::vector<Int>& iperm() const { return iperm_; }
+  const std::vector<Int>& snParent() const { return sn_parent_; }
+  const std::vector<Int>& snStart() const { return sn_start_; }
+  const std::vector<Int>& pivotSign() const { return pivot_sign_; }
+  const TreeSchedule& schedule() const { return schedule_solve_; }
 
   void print(const Logger& logger, bool verbose = false) const;
 };
