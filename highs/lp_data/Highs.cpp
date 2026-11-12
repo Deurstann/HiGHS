@@ -1283,11 +1283,12 @@ bool Highs::chooseHipoFirst() const {
   if (options_.solver != kHighsChooseString) return false;
   if (model_.isQp() || model_.isMip()) return false;
   if (options_.run_centring || options_.icrash) return false;
-  // Options that configure or stop simplex keep it
+  // Options that configure or stop simplex keep it, as does ranging, which
+  // is computed from the simplex data
   if (options_.objective_bound < kHighsInf ||
       options_.simplex_iteration_limit < kHighsIInf ||
       options_.simplex_strategy != kSimplexStrategyDual ||
-      options_.parallel == kHighsOnString)
+      options_.parallel == kHighsOnString || options_.ranging == kHighsOnString)
     return false;
   // So does an interrupt callback that HiPO would not call
   if (callback_.active[kCallbackSimplexInterrupt] &&
@@ -1369,14 +1370,18 @@ HighsStatus Highs::optimizeLpHipoFirst() {
   // Unless presolve has reduced the LP, a basis from crossover has no
   // invertible representation: hot start simplex to get one, keeping
   // HiPO's result if this does not end optimal
-  const bool hot_start_simplex =
-      model_status_ == HighsModelStatus::kOptimal && basis_.valid &&
-      !ekk_instance_.status_.has_invert && options_.use_warm_start;
+  const bool hot_start_simplex = model_status_ == HighsModelStatus::kOptimal &&
+                                 basis_.valid &&
+                                 !ekk_instance_.status_.has_invert;
   if (!hot_start_simplex) return status;
   const HighsModelStatus hipo_model_status = model_status_;
   const HighsSolution hipo_solution = solution_;
   const HighsBasis hipo_basis = basis_;
+  // The crossover basis is used even when the user does not warm start
+  const bool use_warm_start = options_.use_warm_start;
+  options_.use_warm_start = true;
   const HighsStatus hot_start_status = this->optimizeModel();
+  options_.use_warm_start = use_warm_start;
   // As above, after an exception, the solve cannot be repeated
   if (!called_return_from_optimize_model) return hot_start_status;
   if (model_status_ == HighsModelStatus::kOptimal) {

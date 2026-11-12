@@ -607,6 +607,22 @@ TEST_CASE("choose-hipo-first", "[highs_lp_solver]") {
   REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
   double kappa;
   REQUIRE(h.getKappa(kappa) == HighsStatus::kOk);
+  // ... also when the user does not warm start, so ranging is available
+  h.clearSolver();
+  h.setOptionValue("use_warm_start", false);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+  REQUIRE(h.getKappa(kappa) == HighsStatus::kOk);
+  HighsRanging ranging;
+  REQUIRE(h.getRanging(ranging) == HighsStatus::kOk);
+  h.setOptionValue("use_warm_start", true);
+
+  // Ranging during the solve is for simplex
+  h.clearSolver();
+  h.setOptionValue("ranging", kHighsOnString);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getInfo().ipm_iteration_count == 0);
+  h.setOptionValue("ranging", kHighsOffString);
 
   // The objective bound is for simplex
   h.clearSolver();
