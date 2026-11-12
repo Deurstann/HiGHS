@@ -697,6 +697,7 @@ TEST_CASE("AlienBasis-singular-basis", "[highs_test_alien_basis]") {
   Highs highs;
   highs.setOptionValue("output_flag", dev_run);
   if (dev_run) highs.setOptionValue("log_dev_level", 3);
+  highs.setOptionValue("solver", kSimplexString);
   highs.passModel(lp);
   highs.run();
   if (dev_run) highs.writeSolution("", 1);

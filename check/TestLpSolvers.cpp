@@ -2,6 +2,7 @@
 
 #include "HCheckConfig.h"
 #include "Highs.h"
+#include "HighsExternalApi.h"
 #include "catch.hpp"
 
 const bool dev_run = false;
@@ -387,6 +388,7 @@ TEST_CASE("simplex-stats", "[highs_lp_solver]") {
   Highs h;
   const HighsSimplexStats& simplex_stats = h.getSimplexStats();
   h.setOptionValue("output_flag", dev_run);
+  h.setOptionValue("solver", kSimplexString);
   std::string model_file =
       std::string(HIGHS_DIR) + "/check/instances/adlittle.mps";
   REQUIRE(h.readModel(model_file) == HighsStatus::kOk);
@@ -567,6 +569,100 @@ TEST_CASE("choose-lp-solver", "[highs_lp_solver]") {
   // h.setOptionValue("output_flag", true);
   h.run();
   REQUIRE(h.getInfo().ipm_iteration_count > 0);
+
+  h.resetThreadScheduler(true);
+}
+
+TEST_CASE("choose-hipo-first", "[highs_lp_solver]") {
+  // Under solver = "choose", an LP solved from scratch uses HiPO if
+  // available, with simplex as fallback; a warm start uses simplex
+  const bool hipo_available =
+      HighsExternalApi::isAvailable<HighsExtras::hipo>();
+  std::string model_file =
+      std::string(HIGHS_DIR) + "/check/instances/avgas.mps";
+  Highs h;
+  h.setOptionValue("output_flag", dev_run);
+  REQUIRE(h.readModel(model_file) == HighsStatus::kOk);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+  // With run_crossover = "on" or "choose", the solution is basic
+  REQUIRE(h.getBasis().valid);
+  h.clearSolver();
+  h.setOptionValue("run_crossover", kHighsChooseString);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+  REQUIRE(h.getBasis().valid);
+  // The options of the user are restored after the solve
+  std::string option_value;
+  h.getOptionValue("solver", option_value);
+  REQUIRE(option_value == kHighsChooseString);
+  h.getOptionValue("run_crossover", option_value);
+  REQUIRE(option_value == kHighsChooseString);
+  h.setOptionValue("run_crossover", kHighsOnString);
+
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+  REQUIRE(h.getInfo().ipm_iteration_count == 0);
+
+  // Without presolve, the basis comes with an invertible representation
+  h.clearSolver();
+  h.setOptionValue("presolve", kHighsOffString);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kOptimal);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+  double kappa;
+  REQUIRE(h.getKappa(kappa) == HighsStatus::kOk);
+  // ... also when the user does not warm start, so ranging is available
+  h.clearSolver();
+  h.setOptionValue("use_warm_start", false);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+  REQUIRE(h.getKappa(kappa) == HighsStatus::kOk);
+  HighsRanging ranging;
+  REQUIRE(h.getRanging(ranging) == HighsStatus::kOk);
+  h.setOptionValue("use_warm_start", true);
+
+  // Ranging during the solve is for simplex
+  h.clearSolver();
+  h.setOptionValue("ranging", kHighsOnString);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getInfo().ipm_iteration_count == 0);
+  h.setOptionValue("ranging", kHighsOffString);
+
+  // The objective bound is for simplex
+  h.clearSolver();
+  h.setOptionValue("objective_bound", 0.0);
+  h.run();
+  REQUIRE(h.getInfo().ipm_iteration_count == 0);
+  h.setOptionValue("objective_bound", kHighsInf);
+
+  // HiPO's verdict on an infeasible LP is confirmed by simplex
+  HighsLp lp;
+  lp.num_col_ = 2;
+  lp.num_row_ = 2;
+  lp.col_cost_ = {1, 1};
+  lp.col_lower_ = {0, 0};
+  lp.col_upper_ = {kHighsInf, kHighsInf};
+  lp.row_lower_ = {2, -kHighsInf};
+  lp.row_upper_ = {kHighsInf, 1};
+  lp.a_matrix_.format_ = MatrixFormat::kRowwise;
+  lp.a_matrix_.start_ = {0, 2, 4};
+  lp.a_matrix_.index_ = {0, 1, 0, 1};
+  lp.a_matrix_.value_ = {1, 1, 1, 1};
+  REQUIRE(h.passModel(lp) == HighsStatus::kOk);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kInfeasible);
+  REQUIRE((h.getInfo().ipm_iteration_count > 0) == hipo_available);
+
+  // So is its verdict on an unbounded LP
+  lp.col_cost_ = {-1, -1};
+  lp.row_lower_ = {-kHighsInf, -kHighsInf};
+  lp.row_upper_ = {1, 1};
+  lp.a_matrix_.value_ = {1, -1, 1, -1};
+  REQUIRE(h.passModel(lp) == HighsStatus::kOk);
+  REQUIRE(h.run() == HighsStatus::kOk);
+  REQUIRE(h.getModelStatus() == HighsModelStatus::kUnbounded);
 
   h.resetThreadScheduler(true);
 }

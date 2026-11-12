@@ -644,6 +644,7 @@ void runSetLpSolution(const std::string model) {
   const HighsInfo& info = highs.getInfo();
   if (dev_run) printf("\nSolving %s from scratch\n", model.c_str());
   highs.setOptionValue("output_flag", dev_run);
+  highs.setOptionValue("solver", kSimplexString);
   if (dev_run) highs.setOptionValue("log_dev_level", 1);
 
   highs.readModel(model_file);

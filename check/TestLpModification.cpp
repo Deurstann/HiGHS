@@ -2296,6 +2296,7 @@ TEST_CASE("row-wise-get-row-avgas", "[highs_test_lp_modification]") {
 TEST_CASE("hot-start-after-delete", "[highs_test_lp_modification]") {
   Highs h;
   h.setOptionValue("output_flag", dev_run);
+  h.setOptionValue("solver", kSimplexString);
   const HighsLp& lp = h.getLp();
   const HighsInfo& info = h.getInfo();
   const HighsBasis& basis = h.getBasis();

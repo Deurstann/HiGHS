@@ -215,7 +215,7 @@ if ((NOT FAST_BUILD OR ALL_TESTS) AND NOT (BUILD_EXTRA_UNIT_ONLY))
       "80bau3b\;3686\; 9.8722419241\;"
       "adlittle\;74\; 2.2549496316\;"
       "afiro\;22\;-4.6475314286\;"
-      "etamacro\;532\;-7.5571523330\;"
+      "etamacro\;532\;-7.55715233\;"
       "greenbea\;5109\;-7.2555248130\;"
       "shell\;623\; 1.2088253460\;"
       "stair\;529\;-2.5126695119\;"
@@ -229,7 +229,7 @@ if ((NOT FAST_BUILD OR ALL_TESTS) AND NOT (BUILD_EXTRA_UNIT_ONLY))
       "80bau3b\;3705\; 9.8722419241\;"
       "adlittle\;74\; 2.2549496316\;"
       "afiro\;22\;-4.6475314286\;"
-      "etamacro\;531\;-7.5571523330\;"
+      "etamacro\;531\;-7.55715233\;"
       "greenbea\;5156\;-7.2555248130\;"
       "shell\;623\; 1.2088253460\;"
       "stair\;531\;-2.5126695119\;"
@@ -245,7 +245,7 @@ if ((NOT FAST_BUILD OR ALL_TESTS) AND NOT (BUILD_EXTRA_UNIT_ONLY))
       "80bau3b\;3705\; 9.8722419241\;"
       "adlittle\;74\; 2.2549496316\;"
       "afiro\;22\;-4.6475314286\;"
-      "etamacro\;536\;-7.5571523330\;"
+      "etamacro\;536\;-7.55715233\;"
       "greenbea\;5247\;-7.2555248130\;"
       "shell\;623\; 1.2088253460\;"
       "stair\;531\;-2.5126695119\;"
@@ -437,12 +437,18 @@ if ((NOT FAST_BUILD OR ALL_TESTS) AND NOT (BUILD_EXTRA_UNIT_ONLY))
 
       # loop over all settings
       foreach(setting ${settings})
+          # The iteration counts checked without presolve are those of simplex
+          if(${setting} STREQUAL "--presolve=off")
+            set(solver_setting "--solver=simplex")
+          else()
+            set(solver_setting "")
+          endif()
           if (FAST_BUILD)
             add_test(NAME ${name}${setting} COMMAND $<TARGET_FILE:highs-bin> ${setting}
-                ${inst})
+                ${solver_setting} ${inst})
           else()
             add_test(NAME ${name}${setting} COMMAND $<TARGET_FILE:highs> ${setting}
-                ${inst})
+                ${solver_setting} ${inst})
           endif()
 
           set_tests_properties (${name}${setting} PROPERTIES

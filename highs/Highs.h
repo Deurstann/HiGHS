@@ -1889,6 +1889,12 @@ class Highs {
       const HighsStatus return_status, HighsInt original_lp_num_row);
   HighsStatus multiobjectiveSolve();
 
+  // Under solver = "choose", an LP without a warm start or simplex
+  // options is solved by HiPO with crossover (unless it is off), and by
+  // simplex if HiPO's outcome is not reliable
+  bool chooseHipoFirst() const;
+  HighsStatus optimizeLpHipoFirst();
+
   bool aFormatOk(const HighsInt num_nz, const HighsInt format);
   bool qFormatOk(const HighsInt num_nz, const HighsInt format);
   void clearZeroHessian();

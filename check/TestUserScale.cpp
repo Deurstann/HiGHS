@@ -115,6 +115,8 @@ TEST_CASE("user-small-cost-scale", "[highs_user_scale]") {
   const HighsSolution& solution = highs.getSolution();
   highs.setOptionValue("output_flag", dev_run);
   highs.setOptionValue("presolve", kHighsOffString);
+  // Costs scaled below the dual feasibility tolerance stop simplex at once
+  highs.setOptionValue("solver", kSimplexString);
   HighsLp lp;
   lp.num_col_ = 2;
   lp.num_row_ = 2;

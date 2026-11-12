@@ -1274,8 +1274,137 @@ HighsStatus Highs::optimizeHighs() {
   // Level 1 of Highs::run()
   //
   // Move the "mods" to here
-  return this->multi_linear_objective_.size() ? this->multiobjectiveSolve()
-                                              : this->optimizeModel();
+  if (this->multi_linear_objective_.size()) return this->multiobjectiveSolve();
+  return this->chooseHipoFirst() ? this->optimizeLpHipoFirst()
+                                 : this->optimizeModel();
+}
+
+bool Highs::chooseHipoFirst() const {
+  if (options_.solver != kHighsChooseString) return false;
+  if (model_.isQp() || model_.isMip()) return false;
+  if (options_.run_centring || options_.icrash) return false;
+  // Options that configure or stop simplex keep it, as does ranging, which
+  // is computed from the simplex data
+  if (options_.objective_bound < kHighsInf ||
+      options_.simplex_iteration_limit < kHighsIInf ||
+      options_.simplex_strategy != kSimplexStrategyDual ||
+      options_.parallel == kHighsOnString || options_.ranging == kHighsOnString)
+    return false;
+  // So does an interrupt callback that HiPO would not call
+  if (callback_.active[kCallbackSimplexInterrupt] &&
+      !callback_.active[kCallbackIpmInterrupt])
+    return false;
+  // A warm start from a basis or a solution uses simplex
+  const bool warm_start =
+      options_.use_warm_start && (basis_.useful || solution_.value_valid);
+  if (warm_start) return false;
+  return HighsExternalApi::isAvailable<HighsExtras::hipo>();
+}
+
+namespace {
+// Whether the outcome of a HiPO solve must be confirmed or improved by
+// simplex. HiPO detects infeasibility and unboundedness heuristically,
+// unlike presolve and simplex, whose verdicts are kept
+bool hipoOutcomeNeedsSimplex(const HighsStatus status,
+                             const HighsModelStatus model_status,
+                             const HighsInfo& info,
+                             const bool allow_unbounded_or_infeasible,
+                             const bool basis_required,
+                             const bool basis_valid) {
+  if (status == HighsStatus::kError) return true;
+  const bool hipo_verdict =
+      info.ipm_iteration_count > 0 && info.simplex_iteration_count == 0;
+  switch (model_status) {
+    case HighsModelStatus::kNotset:
+    case HighsModelStatus::kSolveError:
+    case HighsModelStatus::kPostsolveError:
+    case HighsModelStatus::kMemoryLimit:
+    case HighsModelStatus::kUnknown:
+      return true;
+    case HighsModelStatus::kInfeasible:
+    case HighsModelStatus::kUnbounded:
+      return hipo_verdict;
+    case HighsModelStatus::kUnboundedOrInfeasible:
+      return hipo_verdict || !allow_unbounded_or_infeasible;
+    case HighsModelStatus::kOptimal:
+      // Presolve used the rules for a basis, but crossover did not run
+      return basis_required && !basis_valid;
+    default:
+      return false;
+  }
+}
+}  // namespace
+
+HighsStatus Highs::optimizeLpHipoFirst() {
+  // The LP is solved from scratch, so any simplex data is stale
+  ekk_instance_.clear();
+  // An undecided status from HiPO is resolved here, not by optimizeModel()
+  const bool allow_unbounded_or_infeasible =
+      options_.allow_unbounded_or_infeasible;
+  // The solution is basic, as from simplex, unless crossover is off
+  const std::string run_crossover = options_.run_crossover;
+  options_.solver = kHipoString;
+  options_.allow_unbounded_or_infeasible = true;
+  if (run_crossover == kHighsChooseString)
+    options_.run_crossover = kHighsOnString;
+  const bool basis_required = options_.run_crossover == kHighsOnString;
+  HighsStatus status = this->optimizeModel();
+  options_.solver = kHighsChooseString;
+  options_.allow_unbounded_or_infeasible = allow_unbounded_or_infeasible;
+  options_.run_crossover = run_crossover;
+  // After an exception, the solve cannot be repeated
+  if (!called_return_from_optimize_model) return status;
+  // The iteration counts cover both solves, unless an error has made the
+  // counts of either invalid
+  const HighsInfo hipo_info = info_;
+  auto addHipoIterations = [&]() {
+    if (!info_.valid || !hipo_info.valid) return;
+    info_.ipm_iteration_count += hipo_info.ipm_iteration_count;
+    info_.crossover_iteration_count += hipo_info.crossover_iteration_count;
+    info_.simplex_iteration_count += hipo_info.simplex_iteration_count;
+  };
+  if (hipoOutcomeNeedsSimplex(status, model_status_, info_,
+                              allow_unbounded_or_infeasible, basis_required,
+                              basis_.valid)) {
+    highsLogUser(options_.log_options, HighsLogType::kInfo,
+                 "HiPO yields model status %s, so solve the LP with simplex\n",
+                 modelStatusToString(model_status_).c_str());
+    this->clearSolver();
+    status = this->optimizeModel();
+    addHipoIterations();
+    return status;
+  }
+  // Unless presolve has reduced the LP, a basis from crossover has no
+  // invertible representation: hot start simplex to get one, keeping
+  // HiPO's result if this does not end optimal
+  const bool hot_start_simplex = model_status_ == HighsModelStatus::kOptimal &&
+                                 basis_.valid &&
+                                 !ekk_instance_.status_.has_invert;
+  if (!hot_start_simplex) return status;
+  const HighsModelStatus hipo_model_status = model_status_;
+  const HighsSolution hipo_solution = solution_;
+  const HighsBasis hipo_basis = basis_;
+  // The crossover basis is used even when the user does not warm start
+  const bool use_warm_start = options_.use_warm_start;
+  options_.use_warm_start = true;
+  const HighsStatus hot_start_status = this->optimizeModel();
+  options_.use_warm_start = use_warm_start;
+  // As above, after an exception, the solve cannot be repeated
+  if (!called_return_from_optimize_model) return hot_start_status;
+  if (model_status_ == HighsModelStatus::kOptimal) {
+    addHipoIterations();
+    return hot_start_status;
+  }
+  highsLogUser(options_.log_options, HighsLogType::kInfo,
+               "Simplex from the crossover basis yields model status %s, so "
+               "keep the solution of HiPO\n",
+               modelStatusToString(model_status_).c_str());
+  ekk_instance_.clear();
+  model_status_ = hipo_model_status;
+  info_ = hipo_info;
+  solution_ = hipo_solution;
+  basis_ = hipo_basis;
+  return status;
 }
 
 HighsStatus Highs::optimizeLp() {
