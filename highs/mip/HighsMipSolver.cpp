@@ -239,8 +239,10 @@ restart:
       cleanupSolve();
       return;
     }
-    // Apply the feasibility jump heuristic (if enabled)
-    if (options_mip_->mip_heuristic_run_feasibility_jump) {
+    // Apply the feasibility jump heuristic (if enabled), a start heuristic
+    // that a sub-MIP with an upper limit (from its caller's incumbent) skips
+    if (options_mip_->mip_heuristic_run_feasibility_jump &&
+        !(submip && mipdata_->upper_limit != kHighsInf)) {
       profiling_->start(kMipClockFeasibilityJump);
       HighsModelStatus returned_model_status = mipdata_->feasibilityJump();
       profiling_->stop(kMipClockFeasibilityJump);
