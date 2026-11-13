@@ -29,6 +29,17 @@ class FactorHighsSolver : public LinearSolver {
   std::string ordering_AS_ = "none";
   std::string ordering_NE_ = "none";
 
+  // Parallelism that the analysis chooses by default for a symbolic
+  // factorisation, before the options override it
+  struct SymbolicParallelism {
+    bool tree = false;
+    bool node = false;
+    bool forward = false;
+    bool backward = false;
+    bool diag = false;
+  };
+  SymbolicParallelism defaultParallelism(const Symbolic& S) const;
+
   Int chooseNla();
   Int setNla();
   void setParallelBeforeSymbolic();

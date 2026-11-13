@@ -596,27 +596,27 @@ void FactorHighsSolver::setParallelBeforeSymbolic() {
                           parallel_NE_values_default);
 }
 
-void FactorHighsSolver::setParallelAfterSymbolic() {
-  bool parallel_tree = false;
-  bool parallel_node = false;
+FactorHighsSolver::SymbolicParallelism FactorHighsSolver::defaultParallelism(
+    const Symbolic& S) const {
+  SymbolicParallelism par;
 
   if (is_substring_case(HighsExtras::blas::getInfo()->provider, "apple")) {
     // Blas on Apple do not work well with parallel_node, but parallel_tree
     // seems to always be beneficial.
-    parallel_node = false;
-    parallel_tree = true;
+    par.node = false;
+    par.tree = true;
   } else {
     // Otherwise, parallel_node is active because it is triggered only if the
     // frontal matrix is large enough anyway.
-    parallel_node = true;
+    par.node = true;
 
     // parallel_tree instead is chosen with a heuristic
 
-    double tree_speedup = kkt_.S.flops() / kkt_.S.critops();
-    double sn_size = (double)kkt_.S.size() / kkt_.S.sn();
+    double tree_speedup = S.flops() / S.critops();
+    double sn_size = (double)S.size() / S.sn();
 
-    bool enough_sn = kkt_.S.sn() > kParallelMinNumberSn;
-    bool enough_flops = kkt_.S.flops() > kParallelLargeFlopsThresh;
+    bool enough_sn = S.sn() > kParallelMinNumberSn;
+    bool enough_flops = S.flops() > kParallelLargeFlopsThresh;
     bool speedup_is_large = tree_speedup > kParallelLargeSpeedupThresh;
     bool sn_are_large = sn_size > kParallelLargeSnThresh;
     bool sn_are_not_small = sn_size > kParallelSmallSnThresh;
@@ -626,40 +626,40 @@ void FactorHighsSolver::setParallelAfterSymbolic() {
     // that the number of flops and supernodes is not too small.
     if (enough_sn && enough_flops &&
         (sn_are_large || (speedup_is_large && sn_are_not_small))) {
-      parallel_tree = true;
+      par.tree = true;
     }
   }
 
   // If serial memory is too large, switch off tree parallelism to avoid
   // running out of memory
-  double num_GB = kkt_.S.storage() / 1024 / 1024 / 1024;
+  double num_GB = S.storage() / 1024 / 1024 / 1024;
   if (num_GB > kParallelLargeStorageGB) {
-    parallel_tree = false;
+    par.tree = false;
   }
 
   // switch off tree parallelism if depth of recursion is too large
-  if (kkt_.S.depth() > kParallelMaxTreeDepth) parallel_tree = false;
+  if (S.depth() > kParallelMaxTreeDepth) par.tree = false;
 
-  options_.chooseParallel(ParallelTechnique::kTree, parallel_tree);
-  options_.chooseParallel(ParallelTechnique::kNode, parallel_node);
+  // parallelism for solve phase
+  if (S.size() > kParallelSolveMinSize) {
+    par.diag = true;
 
-  // choose parallelism for solve phase
-  bool parallel_forward = false;
-  bool parallel_backward = false;
-  bool parallel_diag = false;
-  if (kkt_.S.size() > kParallelSolveMinSize) {
-    parallel_diag = true;
+    if (S.solveTreeSpeedup() > kParallelForwardMinSpeedup) par.forward = true;
 
-    if (kkt_.S.solveTreeSpeedup() > kParallelForwardMinSpeedup)
-      parallel_forward = true;
-
-    if (kkt_.S.solveTreeSpeedup() > kParallelBackwardMinSpeedup)
-      parallel_backward = true;
+    if (S.solveTreeSpeedup() > kParallelBackwardMinSpeedup) par.backward = true;
   }
 
-  options_.chooseParallel(ParallelTechnique::kForwardSolve, parallel_forward);
-  options_.chooseParallel(ParallelTechnique::kBackwardSolve, parallel_backward);
-  options_.chooseParallel(ParallelTechnique::kDiagonalSolve, parallel_diag);
+  return par;
+}
+
+void FactorHighsSolver::setParallelAfterSymbolic() {
+  const SymbolicParallelism par = defaultParallelism(kkt_.S);
+
+  options_.chooseParallel(ParallelTechnique::kTree, par.tree);
+  options_.chooseParallel(ParallelTechnique::kNode, par.node);
+  options_.chooseParallel(ParallelTechnique::kForwardSolve, par.forward);
+  options_.chooseParallel(ParallelTechnique::kBackwardSolve, par.backward);
+  options_.chooseParallel(ParallelTechnique::kDiagonalSolve, par.diag);
 
   for (Int i = 0; i < static_cast<Int>(ParallelTechnique::kCount); ++i)
     assert(options_.parallel[i] == ParallelType::kOn ||
