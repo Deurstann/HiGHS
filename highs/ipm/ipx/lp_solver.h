@@ -115,9 +115,12 @@ public:
     // (upper) bound. Each of the pointer arguments can be NULL, in which case
     // all elements of the vector are assumed to be zero.
     // Returns:
-    // 0                            starting point OK
+    // 0                            starting point OK, crossover run (its
+    //                              outcome is GetInfo().status_crossover)
     // IPX_ERROR_invalid_vector     starting point not complementary or violates
     //                              bound or sign conditions
+    // other nonzero                error flag of the crash basis (e.g.
+    //                              IPX_ERROR_time_interrupt); crossover not run
     Int CrossoverFromStartingPoint(const double* x_start,
                                    const double* slack_start,
                                    const double* y_start,

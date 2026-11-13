@@ -123,9 +123,11 @@ class Solver {
   void runIpx();
   void refineWithIpx();
   void crossoverWithIpx();
+  void crossoverAfterIpxRestart();
 
   void getPointForCrossover(std::vector<double>& x, std::vector<double>& slack,
-                            std::vector<double>& y, std::vector<double>& z);
+                            std::vector<double>& y,
+                            std::vector<double>& z) const;
 
   // ===================================================================================
   // Determine the maximum number of correctors to use, based on the relative

@@ -226,8 +226,9 @@ Int LpSolver::CrossoverFromStartingPoint(const double* x_start,
         basis_->ConstructBasisFromWeights(&colweight[0], &info_);
         info_.time_starting_basis += timer.Elapsed();
         if (info_.errflag) {
+            const Int errflag = info_.errflag;
             ClearSolution();
-            return 1;
+            return errflag;
         }
     }
 

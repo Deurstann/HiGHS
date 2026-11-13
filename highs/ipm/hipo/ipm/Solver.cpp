@@ -120,7 +120,6 @@ void Solver::reset() {
   info_ = Info{};
 
   info_.ipx_used_refine = false;
-  info_.ipx_used_crossover = false;
   info_.m_solver = m_;
   info_.n_solver = n_;
   info_.m_original = model_.m_orig();
@@ -363,45 +362,65 @@ void Solver::refineWithIpx() {
 void Solver::crossoverWithIpx() {
   if (prepareIpx()) return;
 
-  std::vector<double> x, slack, y, z;
-  getPointForCrossover(x, slack, y, z);
-
-  Int status = ipx_lps_.CrossoverFromStartingPoint(x.data(), slack.data(),
-                                                   y.data(), z.data());
-  if (status == IPX_ERROR_invalid_vector) {
-    logger_.printInfo("Error loading starting point into IPX\n");
-    info_.error = kErrorIpx;
+  // Crossover starts from the HiPO point when HiPO judged it ready; otherwise,
+  // or if that crossover cannot start or fails, it runs after the IPX interior
+  // point method restarted from the HiPO iterate.
+  const bool point_is_ready =
+      getStatus2() == kStatusNotSet &&
+      it_->infeasAfterDropping() < options_.crossover_tol;
+  if (!point_is_ready) {
+    crossoverAfterIpxRestart();
     return;
   }
 
-  if (status) {
-    // CrossoverFromStartingPoint can fail before running crossover while doing
-    // crash_basis
-
-    ipx_parameters param = ipx_lps_.GetParameters();
-    param.crash_basis = 0;
-    ipx_lps_.SetParameters(param);
-
-    logger_.printInfo("Re-trying without crash basis\n");
-
-    status = ipx_lps_.CrossoverFromStartingPoint(x.data(), slack.data(),
-                                                 y.data(), z.data());
-
-    if (status) {
-      logger_.printInfo("Error loading starting point into IPX\n");
-      info_.error = kErrorIpx;
-      return;
-    }
-  }
-
-  info_.ipx_used_crossover = true;
-
+  std::vector<double> x, slack, y, z;
+  getPointForCrossover(x, slack, y, z);
+  const Int status = ipx_lps_.CrossoverFromStartingPoint(x.data(), slack.data(),
+                                                         y.data(), z.data());
   info_.ipx_info = ipx_lps_.GetInfo();
+
+  if (status == IPX_ERROR_time_interrupt) {
+    setStatus2(kStatusTimeLimit);
+    return;
+  }
+  if (status == IPX_ERROR_user_interrupt ||
+      info_.ipx_info.status_ipm == IPX_STATUS_user_interrupt) {
+    setStatus2(kStatusUserInterrupt);
+    return;
+  }
+  if (status || info_.ipx_info.status_crossover == IPX_STATUS_failed) {
+    logger_.printInfo("Crossover from the HiPO point failed, so restart IPX\n");
+    crossoverAfterIpxRestart();
+    return;
+  }
 
   if (info_.ipx_info.status_crossover != IPX_STATUS_not_run)
     setStatus2(IpxToHipoStatus(info_.ipx_info.status_crossover));
+}
 
-  if (info_.ipx_info.errflag) info_.error = kErrorIpx;
+void Solver::crossoverAfterIpxRestart() {
+  if (prepareIpxStartingPoint()) return;
+  ipx_lps_.Solve();
+  info_.ipx_info = ipx_lps_.GetInfo();
+
+  // Hipo status_1 is optimal. If ipx fails, leave current hipo status,
+  // because optimal without crossover is better than failed status.
+
+  const bool ipx_status_usable =
+      info_.ipx_info.status_ipm != IPX_STATUS_not_run &&
+      info_.ipx_info.status_ipm != IPX_STATUS_failed;
+
+  if (ipx_status_usable) {
+    info_.ipx_used_refine = true;
+    setStatus2(IpxToHipoStatus(info_.ipx_info.status_ipm));
+
+    const bool crossover_status_usable =
+        info_.ipx_info.status_crossover != IPX_STATUS_not_run &&
+        info_.ipx_info.status_crossover != IPX_STATUS_failed;
+
+    if (crossover_status_usable)
+      setStatus2(IpxToHipoStatus(info_.ipx_info.status_crossover));
+  }
 }
 
 isFailure Solver::solveNewtonSystem(NewtonDir& delta) {
@@ -1504,7 +1523,7 @@ Int Solver::getBasicSolution(std::vector<double>& x, std::vector<double>& slack,
 void Solver::getPointForCrossover(std::vector<double>& x,
                                   std::vector<double>& slack,
                                   std::vector<double>& y,
-                                  std::vector<double>& z) {
+                                  std::vector<double>& z) const {
   model_.postprocess(x, slack, y, z, *it_);
 }
 
