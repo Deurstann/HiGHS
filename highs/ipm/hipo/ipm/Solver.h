@@ -229,28 +229,20 @@ class Solver {
   isFailure startingPoint();
 
   // ===================================================================================
-  // Compute the sigma to use for affine scaling direction or correctors, based
-  // on the smallest stepsize of the previous iteration.
-  // If stepsize was large, use small sigma to reduce mu.
-  // If stepsize was small, use large sigma to re-centre.
-  //
-  //  alpha | sigma  |   sigma    |
-  //        | affine | correctors |
-  //  1.0   |--------|------------|
-  //        |        |    0.01    |
-  //  0.5   |        |------------|
-  //        |        |    0.10    |
-  //  0.2   |        |------------|
-  //        |  0.01  |    0.25    |
-  //  0.1   |        |------------|
-  //        |        |    0.50    |
-  //  0.05  |        |------------|
-  //        |        |    0.90    |
-  //  0.0   |--------|------------|
-  //
+  // Predictor-corrector of Mehrotra, "On the implementation of a primal-dual
+  // interior point method" (1992): the predictor is the affine-scaling
+  // direction (sigma = 0). The corrector takes sigma = (mu_aff / mu)^3, with
+  // mu_aff the mean product after the steps to the boundary along the
+  // predictor, and the second-order term -dx_aff * dz_aff; it is added to the
+  // predictor before the centrality correctors.
   // ===================================================================================
   void sigmaAffine();
-  void sigmaCorrectors();
+  isFailure mehrotraCorrector();
+
+  // Mean product of the bounds of non-free columns after primal and dual steps
+  // of lengths alpha_p and alpha_d along delta; of the artificial bounds of
+  // free columns if there is no other bound, 0 if there is no bound at all.
+  double muAtStep(const NewtonDir& delta, double alpha_p, double alpha_d) const;
 
   // ===================================================================================
   // Compute the residuals for the computation of multiple centrality

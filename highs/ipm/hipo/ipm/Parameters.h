@@ -13,7 +13,6 @@ const double kDivergeTol = 1e3;
 
 // parameters for correctors
 const double kGammaCorrector = 0.1;
-const double kSigmaAffine = 0.01;
 const Int kMaxCorrectors = 10;
 const double kMccIncreaseAlpha = 0.1;
 const double kMccIncreaseMin = 0.1;

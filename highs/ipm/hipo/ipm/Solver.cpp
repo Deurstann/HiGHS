@@ -262,7 +262,7 @@ isFailure Solver::correctors() {
 
   if (checkInterrupt()) return true;
 
-  sigmaCorrectors();
+  if (mehrotraCorrector()) return true;
   if (centralityCorrectors()) return true;
 
   info_.times[kCorrectorsTime] += clock.stop();
@@ -905,25 +905,73 @@ isFailure Solver::startingPoint() {
 }
 
 void Solver::sigmaAffine() {
-  sigma_ = kSigmaAffine;
+  sigma_ = 0.0;
 
   it_->data.back().sigma_aff = sigma_;
 }
 
-void Solver::sigmaCorrectors() {
-  if ((alpha_primal_ > 0.5 && alpha_dual_ > 0.5) || iter_ == 1) {
-    sigma_ = 0.01;
-  } else if (alpha_primal_ > 0.2 && alpha_dual_ > 0.2) {
-    sigma_ = 0.1;
-  } else if (alpha_primal_ > 0.1 && alpha_dual_ > 0.1) {
-    sigma_ = 0.25;
-  } else if (alpha_primal_ > 0.05 && alpha_dual_ > 0.05) {
-    sigma_ = 0.5;
-  } else {
-    sigma_ = 0.9;
+isFailure Solver::mehrotraCorrector() {
+  const NewtonDir& aff = it_->delta;
+  double alpha_p, alpha_d;
+  stepsToBoundary(alpha_p, alpha_d, aff);
+
+  const double mu_aff = muAtStep(aff, alpha_p, alpha_d);
+  const double ratio = it_->mu > 0.0 ? mu_aff / it_->mu : 1.0;
+  sigma_ = std::min(1.0, std::max(0.0, ratio * ratio * ratio));
+  it_->data.back().sigma = sigma_;
+
+  // right-hand side: zero residuals 1-4, sigma * mu - dx_aff * dz_aff on the
+  // bounds of non-free columns (the artificial pairs are centred after the
+  // step, as in the centrality correctors)
+  it_->clearRes();
+  for (Int i = 0; i < n_; ++i) {
+    if (model_.isFree(i)) continue;
+    if (model_.hasLb(i))
+      it_->res.r5[i] = sigma_ * it_->mu - aff.xl[i] * aff.zl[i];
+    if (model_.hasUb(i))
+      it_->res.r6[i] = sigma_ * it_->mu - aff.xu[i] * aff.zu[i];
   }
 
-  it_->data.back().sigma = sigma_;
+  NewtonDir corrector(m_, n_);
+  const LinearSolverType solver_type = LS_->type();
+  if (solveNewtonSystem(corrector)) return true;
+
+  // a failed solve switches to the multifrontal factorisation and may reset
+  // the iterate: both directions are then computed again, from the residuals
+  // and the scaling of the iterate kept
+  if (LS_->type() != solver_type) {
+    it_->clearDir();
+    it_->residual1234();
+    it_->computeScaling();
+    LS_->clear();
+    if (predictor()) return true;
+    return mehrotraCorrector();
+  }
+
+  it_->delta.add(corrector);
+  return false;
+}
+
+double Solver::muAtStep(const NewtonDir& delta, double alpha_p,
+                        double alpha_d) const {
+  // sums over the bounds of non-free columns (0) and of free columns (1)
+  double mu[2] = {0.0, 0.0};
+  Int num_finite[2] = {0, 0};
+  for (Int i = 0; i < n_; ++i) {
+    const Int k = model_.isFree(i) ? 1 : 0;
+    if (model_.hasLb(i)) {
+      mu[k] += (it_->xl[i] + alpha_p * delta.xl[i]) *
+               (it_->zl[i] + alpha_d * delta.zl[i]);
+      ++num_finite[k];
+    }
+    if (model_.hasUb(i)) {
+      mu[k] += (it_->xu[i] + alpha_p * delta.xu[i]) *
+               (it_->zu[i] + alpha_d * delta.zu[i]);
+      ++num_finite[k];
+    }
+  }
+  if (num_finite[0] > 0) return mu[0] / num_finite[0];
+  return num_finite[1] > 0 ? mu[1] / num_finite[1] : 0.0;
 }
 
 void Solver::residualsMcc() {
@@ -1517,14 +1565,14 @@ void Solver::chooseNumberOfCorrectors() {
     double ratio = alpha * fact_effort / solv_effort;
     if (std::isnan(ratio)) ratio = 0;
 
-    // At each ipm iteration, there are up to (1+k) directions computed, where
-    // k is the number of correctors. Each direction requires up (1+f) solves,
-    // where f is the number of refinement steps. So, up to (1+k)(1+f) solves
-    // are performed per iteration. However, not all refinement steps are used
-    // all the time, so use f/2.
-    // Therefore, we want (1+k)(1+f/2) < ratio.
+    // At each ipm iteration, there are up to (2+k) directions computed: the
+    // predictor, the Mehrotra corrector and k centrality correctors. Each
+    // direction requires up (1+f) solves, where f is the number of refinement
+    // steps. So, up to (2+k)(1+f) solves are performed per iteration. However,
+    // not all refinement steps are used all the time, so use f/2.
+    // Therefore, we want (2+k)(1+f/2) < ratio.
 
-    double thresh = ratio / (1.0 + kRefineMaxIter / 2.0) - 1;
+    double thresh = ratio / (1.0 + kRefineMaxIter / 2.0) - 2;
 
     info_.correctors = std::floor(thresh);
     info_.correctors = std::max(info_.correctors, (Int)1);
