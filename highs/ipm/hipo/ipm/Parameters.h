@@ -48,7 +48,7 @@ const double kUplookSpopsRatioUpper = 100;
 const double kSkipSystemNzBoundsRatio = 50.0;
 
 // parameters for iterative refinement
-const Int kRefineMaxIter = 3;
+const Int kRefineMaxIter = 1;
 const double kRefineTol = 1e-12;
 
 // parameters for scaling
