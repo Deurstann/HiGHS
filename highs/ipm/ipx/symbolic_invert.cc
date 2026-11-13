@@ -27,7 +27,7 @@ static std::vector<Int> Matching(const Model& model,
     std::vector<Int> jmatch(m, -1);
     std::vector<Int> cheap(Ap, Ap+n+m);
     std::vector<Int> marked(n+m, -1);
-    std::vector<Int> work(m), work2(m+1), work3(m+1);
+    std::vector<Int> work(m), work2(m+1), work3(m+1), work4(m+1);
 
     // Match singletons first, since then they are all cheap matches.
     for (Int j : basis) {
@@ -35,7 +35,7 @@ static std::vector<Int> Matching(const Model& model,
             bool matched = AugmentingPath(j, Ap, Ai, jmatch.data(),
                                           cheap.data(), marked.data(),
                                           work.data(), work2.data(),
-                                          work3.data());
+                                          work3.data(), work4.data());
             assert(matched);
         }
     }
@@ -44,7 +44,7 @@ static std::vector<Int> Matching(const Model& model,
             bool matched = AugmentingPath(j, Ap, Ai, jmatch.data(),
                                           cheap.data(), marked.data(),
                                           work.data(), work2.data(),
-                                          work3.data());
+                                          work3.data(), work4.data());
             assert(matched);
         }
     }

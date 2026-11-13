@@ -3,6 +3,9 @@
 
 namespace ipx {
 
+// Mark of a column visited by a failed AugmentingPath search.
+static constexpr Int kDeadColumn = -2;
+
 Int DepthFirstSearch(Int istart, const Int* Ap, const Int* Ai,
                      const Int* colmap, Int top, Int* istack, Int* marked,
                      Int marker, Int* work) {
@@ -38,13 +41,17 @@ Int DepthFirstSearch(Int istart, const Int* Ap, const Int* Ai,
 }
 
 bool AugmentingPath(Int jstart, const Int* Ap, const Int* Ai, Int* jmatch,
-                    Int* cheap, Int* marked, Int* work, Int* work2, Int* work3){
+                    Int* cheap, Int* marked, Int* work, Int* work2, Int* work3,
+                    Int* work4) {
     // istack holds row indices without duplicates.
     // jstack holds jstart and up to m indices from jmatch.
     // pstack holds the corresponding column pointers.
+    // visited holds jstart and the matched columns visited, at most m+1.
     Int* istack = work;
     Int* jstack = work2;
     Int* pstack = work3;
+    Int* visited = work4;
+    Int num_visited = 0;
     bool found = false;
     Int head = 0;
     jstack[head] = jstart;
@@ -52,6 +59,7 @@ bool AugmentingPath(Int jstart, const Int* Ap, const Int* Ai, Int* jmatch,
         const Int j = jstack[head];
         if (marked[j] != jstart) { // first time j visited in this path
             marked[j] = jstart;
+            visited[num_visited++] = j;
             Int i, p;
             for (p = cheap[j]; p < Ap[j+1] && !found; p++) {
                 i = Ai[p];
@@ -72,7 +80,8 @@ bool AugmentingPath(Int jstart, const Int* Ap, const Int* Ai, Int* jmatch,
             if (jmatch[i] < -1) // row to be ignored
                 continue;
             assert(jmatch[i] >= 0);
-            if (marked[jmatch[i]] == jstart)
+            if (marked[jmatch[i]] == jstart ||
+                marked[jmatch[i]] == kDeadColumn)
                 continue;
             pstack[head] = p+1;
             istack[head] = i;
@@ -85,6 +94,9 @@ bool AugmentingPath(Int jstart, const Int* Ap, const Int* Ai, Int* jmatch,
     if (found) {
         for (Int p = head; p >= 0; p--)
             jmatch[istack[p]] = jstack[p];
+    } else {
+        for (Int k = 0; k < num_visited; k++)
+            marked[visited[k]] = kDeadColumn;
     }
     return found;
 }

@@ -37,13 +37,19 @@ Int DepthFirstSearch(Int istart, const Int* Ap, const Int* Ai,
 //         Row i is unmatched and excluded from being matched if jmatch[i] < -1.
 // @cheap array of size n. On the first call, @cheap must hold @Ap[0..n-1].
 //        It must be unchanged between subsequent calls.
-// @marked array of size n. On entry @marked[j] != @jstart for all j.
-//         On return some entries were set to @jstart.
+// @marked array of size n. On entry @marked[j] != @jstart for all j. No entry
+//         is -2 before the first call, and @marked must be unchanged between
+//         calls, like @cheap. On return some entries were set to @jstart, or to
+//         -2 if the search failed.
 // @work size m workspace.
 // @work2 size m+1 workspace.
 // @work3 size m+1 workspace.
+// @work4 size m+1 workspace.
 //
-// Returns true if the matching was extended.
+// Returns true if the matching was extended. A failed search marks every column
+// it visited with -2, and later calls skip these columns: each of their rows is
+// excluded or matched to a column marked -2, so no augmenting path can pass
+// through them.
 //
 // The code has been copied and adapted from cs_augment.c, included in the
 // CSPARSE package [1].
@@ -51,7 +57,8 @@ Int DepthFirstSearch(Int istart, const Int* Ap, const Int* Ai,
 // [1] T. Davis, "Direct methods for sparse linear systems" (2006)
 //
 bool AugmentingPath(Int jstart, const Int* Ap, const Int* Ai, Int* jmatch,
-                    Int* cheap, Int* marked, Int* work, Int* work2, Int* work3);
+                    Int* cheap, Int* marked, Int* work, Int* work2, Int* work3,
+                    Int* work4);
 
 }  // namespace ipx
 
