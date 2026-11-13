@@ -620,14 +620,17 @@ void LpSolver::RunCrossover() {
                 basic_statuses_[j] = IPX_superbasic;
         }
     }
-    control_.Debug()
-        << Textline("Bound violation of basic solution:")
-        << sci2(PrimalInfeasibility(model_, x_crossover_)) << '\n'
-        << Textline("Dual sign violation of basic solution:")
-        << sci2(DualInfeasibility(model_, x_crossover_, z_crossover_)) << '\n';
-    control_.Debug()
-        << Textline("Minimum singular value of basis matrix:")
-        << sci2(basis_->MinSingularValue()) << '\n';
+    if (control_.Debug()) {
+        control_.Debug()
+            << Textline("Bound violation of basic solution:")
+            << sci2(PrimalInfeasibility(model_, x_crossover_)) << '\n'
+            << Textline("Dual sign violation of basic solution:")
+            << sci2(DualInfeasibility(model_, x_crossover_, z_crossover_))
+            << '\n';
+        control_.Debug()
+            << Textline("Minimum singular value of basis matrix:")
+            << sci2(basis_->MinSingularValue()) << '\n';
+    }
 
     // Declare crossover status "imprecise" if the vertex solution defined by
     // the final basis does not satisfy tolerances.

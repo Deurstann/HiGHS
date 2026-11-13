@@ -62,11 +62,12 @@ void Crossover::PushAll(Basis* basis, Vector& x, Vector& y, Vector& z,
     if (info->status_crossover != IPX_STATUS_optimal)
         return;
 
-    control_.Debug()
-        << Textline("Primal residual after push phase:")
-        << sci2(PrimalResidual(model, x)) << '\n'
-        << Textline("Dual residual after push phase:")
-        << sci2(DualResidual(model, y, z)) << '\n';
+    if (control_.Debug())
+        control_.Debug()
+            << Textline("Primal residual after push phase:")
+            << sci2(PrimalResidual(model, x)) << '\n'
+            << Textline("Dual residual after push phase:")
+            << sci2(DualResidual(model, y, z)) << '\n';
     info->status_crossover = IPX_STATUS_optimal;
 }
 
@@ -159,9 +160,10 @@ void Crossover::PushPrimal(Basis* basis, Vector& x,
 	    if (info->errflag == IPX_ERROR_user_interrupt ||
 		info->errflag == IPX_ERROR_time_interrupt) break;
             if (info->errflag) {
-                control_.Debug()
-                    << Textline("Minimum singular value of basis matrix:")
-                    << sci2(basis->MinSingularValue()) << '\n';
+                if (control_.Debug())
+                    control_.Debug()
+                        << Textline("Minimum singular value of basis matrix:")
+                        << sci2(basis->MinSingularValue()) << '\n';
                 break;
             }
             if (!exchanged)     // factorization was unstable, try again
@@ -293,9 +295,10 @@ void Crossover::PushDual(Basis* basis, Vector& y, Vector& z,
 	    if (info->errflag == IPX_ERROR_user_interrupt ||
 		info->errflag == IPX_ERROR_time_interrupt) break;
             if (info->errflag) {
-                control_.Debug()
-                    << Textline("Minimum singular value of basis matrix:")
-                    << sci2(basis->MinSingularValue()) << '\n';
+                if (control_.Debug())
+                    control_.Debug()
+                        << Textline("Minimum singular value of basis matrix:")
+                        << sci2(basis->MinSingularValue()) << '\n';
                 break;
             }
             if (!exchanged)     // factorization was unstable, try again

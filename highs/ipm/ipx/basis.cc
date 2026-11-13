@@ -360,10 +360,10 @@ void Basis::ConstructBasisFromWeights(const double* colscale, Info* info) {
 	  info->errflag = IPX_ERROR_time_interrupt;
 	  return;
 	}
-        double sigma = MinSingularValue();
-        control_.Debug()
-            << Textline("Minimum singular value of crash basis:") << sci2(sigma)
-            << '\n';
+        if (control_.Debug())
+            control_.Debug()
+                << Textline("Minimum singular value of crash basis:")
+                << sci2(MinSingularValue()) << '\n';
         Repair(info, interrupt);
 	if (interrupt) {
 	  info->errflag = IPX_ERROR_time_interrupt;
@@ -373,11 +373,10 @@ void Basis::ConstructBasisFromWeights(const double* colscale, Info* info) {
 	  control_.hLog(" discarding crash basis\n");
 	     SetToSlackBasis();
         }
-        else if (info->basis_repairs > 0) {
-            sigma = MinSingularValue();
+        else if (info->basis_repairs > 0 && control_.Debug()) {
             control_.Debug()
                 << Textline("Minimum singular value of repaired crash basis:")
-                << sci2(sigma) << '\n';
+                << sci2(MinSingularValue()) << '\n';
         }
     } else {
         SetToSlackBasis();
