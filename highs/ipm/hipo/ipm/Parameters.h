@@ -20,10 +20,25 @@ const double kMccIncreaseMin = 0.1;
 const double kSmallProduct = 1e-3;
 const double kLargeProduct = 1e3;
 
-// parameters for choice of AS or NE
-const double kSystemSpopsWeight = 30.0;
-const double kSystemRatioOpsThresh = 10.0;
-const double kSystemRatioSnThresh = 1.5;
+// parameters for choice of AS or NE: empirical time of an iteration with the
+// multifrontal factorisation, in seconds per count of the symbolic
+// factorisation (flops, supernodes, nonzeros of L, rows) and of the matrix A,
+// average number of solves per iteration, and speedups of the parallel phases
+const double kCostFactorPerFlop = 2.5e-11;
+const double kCostFactorPerSupernode = 1.2e-6;
+const double kCostFactorPerNz = 2.0e-8;
+const double kCostSolvePerNz = 1.7e-9;
+const double kCostSolvePerSupernode = 1.1e-7;
+const double kCostSolvePerRow = 3.8e-8;
+const double kCostResidualPerNzA = 1.1e-8;
+const double kCostSolvesPerIterAS = 7.0;
+const double kCostSolvesPerIterNE = 5.1;
+const double kCostSpeedupTree = 2.4;
+const double kCostSpeedupForwardSolve = 2.7;
+const double kCostSpeedupOtherSolve = 1.2;
+
+// NE analysis is interrupted if its matrix has more nonzeros than this
+// multiple of the nonzeros of the factor of AS
 const double kSystemSymbNzMult = 5.0;
 
 // parameters for choice of parallelism

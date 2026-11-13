@@ -40,6 +40,11 @@ class FactorHighsSolver : public LinearSolver {
   };
   SymbolicParallelism defaultParallelism(const Symbolic& S) const;
 
+  // Predicted time in seconds of an IPM iteration that factorises the
+  // augmented system (augmented = true) or the normal equations with the
+  // multifrontal solver and symbolic factorisation S
+  double predictIterationTime(const Symbolic& S, bool augmented) const;
+
   Int chooseNla();
   Int setNla();
   void setParallelBeforeSymbolic();

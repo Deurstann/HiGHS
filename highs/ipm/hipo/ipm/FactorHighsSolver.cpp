@@ -315,23 +315,16 @@ Int FactorHighsSolver::chooseNla() {
 
     logger_.printe("Both NE and AS failed analyse phase\n");
   } else {
-    // Total number of operations, given by dense flops and sparse indexing
-    // operations, weighted with an empirical factor
-    double ops_NE = symb_NE.flops() + symb_NE.spops() * kSystemSpopsWeight;
-    double ops_AS = symb_AS.flops() + symb_AS.spops() * kSystemSpopsWeight;
+    // Each system is priced by the predicted time of an iteration with the
+    // multifrontal factorisation, the engine used when the up-looking one
+    // fails, at the current number of threads and with the parallelism its
+    // analysis would choose.
+    const double time_AS = predictIterationTime(symb_AS, true);
+    const double time_NE = predictIterationTime(symb_NE, false);
+    logger_.printInfo("Predicted iteration time: AS %.2e, NE %.2e\n", time_AS,
+                      time_NE);
 
-    double sn_size_NE = (double)symb_NE.size() / symb_NE.sn();
-    double sn_size_AS = (double)symb_AS.size() / symb_AS.sn();
-
-    double ratio_ops = ops_NE / ops_AS;
-    double ratio_sn = sn_size_AS / sn_size_NE;
-
-    bool NE_much_more_expensive = ratio_ops > kSystemRatioOpsThresh;
-    bool AS_not_too_expensive = ratio_ops > 1.0 / kSystemRatioOpsThresh;
-    bool sn_AS_larger_than_NE = ratio_sn > kSystemRatioSnThresh;
-
-    if (NE_much_more_expensive ||
-        (sn_AS_larger_than_NE && AS_not_too_expensive)) {
+    if (time_AS <= time_NE) {
       options_.nla = kHipoAugmentedString;
       log_stream << textline("Newton system:") << "AS preferred\n";
     } else {
@@ -650,6 +643,43 @@ FactorHighsSolver::SymbolicParallelism FactorHighsSolver::defaultParallelism(
   }
 
   return par;
+}
+
+double FactorHighsSolver::predictIterationTime(const Symbolic& S,
+                                               bool augmented) const {
+  const SymbolicParallelism par = defaultParallelism(S);
+  const bool tree =
+      options_.resolveParallel(ParallelTechnique::kTree, par.tree);
+  const bool forward =
+      options_.resolveParallel(ParallelTechnique::kForwardSolve, par.forward);
+  const bool other_solve =
+      options_.resolveParallel(ParallelTechnique::kBackwardSolve,
+                               par.backward) ||
+      options_.resolveParallel(ParallelTechnique::kDiagonalSolve, par.diag);
+
+  // a parallel phase cannot be faster than the number of threads allows
+  const double threads = highs::parallel::num_threads();
+  const double factor_speedup =
+      tree ? std::min(threads, kCostSpeedupTree) : 1.0;
+  double solve_speedup = 1.0;
+  if (forward)
+    solve_speedup = std::min(threads, kCostSpeedupForwardSolve);
+  else if (other_solve)
+    solve_speedup = std::min(threads, kCostSpeedupOtherSolve);
+
+  const double factor_time =
+      (kCostFactorPerFlop * S.flops() + kCostFactorPerSupernode * S.sn() +
+       kCostFactorPerNz * S.nz()) /
+      factor_speedup;
+  const double solve_time =
+      (kCostSolvePerNz * S.nz() + kCostSolvePerSupernode * S.sn() +
+       kCostSolvePerRow * S.size()) /
+      solve_speedup;
+  // residuals and backward error of each solve, on the matrix A
+  const double residual_time = kCostResidualPerNzA * model_.A().numNz();
+  const double solves = augmented ? kCostSolvesPerIterAS : kCostSolvesPerIterNE;
+
+  return factor_time + solves * (solve_time + residual_time);
 }
 
 void FactorHighsSolver::setParallelAfterSymbolic() {

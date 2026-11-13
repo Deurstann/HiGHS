@@ -39,6 +39,13 @@ struct Options {
   inline void setParallel(ParallelTechnique bit, ParallelType type) {
     parallel[static_cast<Int>(bit)] = type;
   }
+  // Value that chooseParallel would give to bit, without setting it
+  inline bool resolveParallel(ParallelTechnique bit,
+                              bool default_behaviour) const {
+    const ParallelType type = parallel[static_cast<Int>(bit)];
+    if (type == ParallelType::kChoose) return default_behaviour;
+    return type == ParallelType::kOn;
+  }
   inline void chooseParallel(ParallelTechnique bit, bool default_behaviour) {
     ParallelType type_default =
         default_behaviour ? ParallelType::kOn : ParallelType::kOff;
