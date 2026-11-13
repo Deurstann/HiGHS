@@ -348,7 +348,7 @@ void Solver::refineWithIpx() {
       info_.ipx_info.status_ipm != IPX_STATUS_failed;
 
   if (ipx_status_usable) {
-    info_.ipx_used = true;
+    info_.ipx_used_refine = true;
     setStatus1(IpxToHipoStatus(info_.ipx_info.status_ipm));
 
     const bool crossover_status_usable =
@@ -361,31 +361,47 @@ void Solver::refineWithIpx() {
 }
 
 void Solver::crossoverWithIpx() {
-  // at the moment this is almost identical to refineWithIpx, but in the
-  // future it will use ipx_lps_.CrossoverFromStartingPoint
   if (prepareIpx()) return;
-  if (prepareIpxStartingPoint()) return;
-  ipx_lps_.Solve();
+
+  std::vector<double> x, slack, y, z;
+  getPointForCrossover(x, slack, y, z);
+
+  Int status = ipx_lps_.CrossoverFromStartingPoint(x.data(), slack.data(),
+                                                   y.data(), z.data());
+  if (status == IPX_ERROR_invalid_vector) {
+    logger_.printInfo("Error loading starting point into IPX\n");
+    info_.error = kErrorIpx;
+    return;
+  }
+
+  if (status) {
+    // CrossoverFromStartingPoint can fail before running crossover while doing
+    // crash_basis
+
+    ipx_parameters param = ipx_lps_.GetParameters();
+    param.crash_basis = 0;
+    ipx_lps_.SetParameters(param);
+
+    logger_.printInfo("Re-trying without crash basis\n");
+
+    status = ipx_lps_.CrossoverFromStartingPoint(x.data(), slack.data(),
+                                                 y.data(), z.data());
+
+    if (status) {
+      logger_.printInfo("Error loading starting point into IPX\n");
+      info_.error = kErrorIpx;
+      return;
+    }
+  }
+
+  info_.ipx_used_crossover = true;
+
   info_.ipx_info = ipx_lps_.GetInfo();
 
-  // Hipo status_1 is optimal. If ipx fails, leave current hipo status,
-  // because optimal without crossover is better than failed status.
+  if (info_.ipx_info.status_crossover != IPX_STATUS_not_run)
+    setStatus2(IpxToHipoStatus(info_.ipx_info.status_crossover));
 
-  const bool ipx_status_usable =
-      info_.ipx_info.status_ipm != IPX_STATUS_not_run &&
-      info_.ipx_info.status_ipm != IPX_STATUS_failed;
-
-  if (ipx_status_usable) {
-    info_.ipx_used = true;
-    setStatus2(IpxToHipoStatus(info_.ipx_info.status_ipm));
-
-    const bool crossover_status_usable =
-        info_.ipx_info.status_crossover != IPX_STATUS_not_run &&
-        info_.ipx_info.status_crossover != IPX_STATUS_failed;
-
-    if (crossover_status_usable)
-      setStatus2(IpxToHipoStatus(info_.ipx_info.status_crossover));
-  }
+  if (info_.ipx_info.errflag) info_.error = kErrorIpx;
 }
 
 isFailure Solver::solveNewtonSystem(NewtonDir& delta) {
