@@ -131,8 +131,11 @@ void PreprocessEmptyRows::undo(DroppedPoint& point, const Model& model,
     Int pos = 0;
 
     for (Int i = 0; i < m_pre; ++i) {
-      // ignore shift of empty rows, they will receive a value of 0
-      if (rows_shift[i] == -1) continue;
+      // empty row
+      if (rows_shift[i] == -1) {
+        new_slack[i] = b_pre[i];
+        continue;
+      }
 
       // re-align value of y and slack, considering empty rows
       new_y[pos + rows_shift[i]] = point.y[pos];
