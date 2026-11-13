@@ -88,7 +88,7 @@ Int FactorHighsSolver::factorAS(const std::vector<double>& scaling) {
   kkt_.buildASvalues(scaling);
 
   // set static regularisation, since it may have changed
-  FH_.setRegularisation(regul_.primal, regul_.dual);
+  FH_.setRegularisation(regul_.multifrontal_primal, regul_.multifrontal_dual);
 
   Clock clock;
   if (FH_.factorise(kkt_.S, kkt_.n(), kkt_.nz(), kkt_.rowsAS.data(),
@@ -108,7 +108,7 @@ Int FactorHighsSolver::factorNE(const std::vector<double>& scaling) {
   kkt_.buildNEvalues(scaling);
 
   // set static regularisation, since it may have changed
-  FH_.setRegularisation(regul_.primal, regul_.dual);
+  FH_.setRegularisation(regul_.multifrontal_primal, regul_.multifrontal_dual);
 
   Clock clock;
   if (FH_.factorise(kkt_.S, kkt_.n(), kkt_.nz(), kkt_.rowsNE.data(),

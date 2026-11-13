@@ -73,10 +73,14 @@ const double kParallelSolveMinSize = 1e4;
 const double kParallelForwardMinSpeedup = 2;
 const double kParallelBackwardMinSpeedup = 1.2;
 
-// static regularisation
+// static regularisation (primal, dual); the multifrontal factorisation
+// subtracts multifrontal_primal from the pivots of the primal block and adds
+// multifrontal_dual to the other pivots
 struct Regularisation {
   double primal = 1e-12;
   double dual = 1e-10;
+  double multifrontal_primal = 2e-10;
+  double multifrontal_dual = 2e-12;
 };
 
 }  // namespace hipo
